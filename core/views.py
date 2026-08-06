@@ -503,10 +503,20 @@ def _username_base_from_identity(*, full_name: str = "", email: str = "", userna
         return (cleaned[:20] or "user")
     if email and "@" in email:
         base = email.split("@")[0].lower()
-    else:
-        base = (full_name.split(" ")[0] if full_name else "user").lower()
-    cleaned = "".join(ch for ch in base if ch.isalnum())[:20]
-    return cleaned or "user"
+        cleaned = "".join(ch for ch in base if ch.isalnum() or ch in "._-")[:20]
+        return cleaned or "user"
+
+    titles = {"mr", "mrs", "ms", "miss", "dr", "sir", "madam", "prof", "rev"}
+    parts = [
+        "".join(ch for ch in part.lower() if ch.isalnum())
+        for part in (full_name or "").replace(".", " ").split()
+    ]
+    parts = [p for p in parts if p and p not in titles]
+    if not parts:
+        return "user"
+    # Prefer surname-like token when available, else first given name.
+    base = parts[-1] if len(parts) > 1 else parts[0]
+    return base[:20] or "user"
 
 
 def _provision_school_supervisor(
@@ -1070,8 +1080,14 @@ def upload_supervisors(request):
                 with transaction.atomic():
                     for idx, row in enumerate(rows, start=1):
                         full_name = row_lookup(
-                            row, "full_name", "name", "supervisor_name", "supervisor", "names"
-                        )
+                            row,
+                            "full_name",
+                            "name",
+                            "supervisor_name",
+                            "supervisor",
+                            "names",
+                            allow_lone_value=True,
+                        )[:150]
                         email = row_lookup(row, "email", "e_mail", "mail")
                         username = row_lookup(row, "username", "user_name", "login", "user")
 
@@ -1085,9 +1101,13 @@ def upload_supervisors(request):
                         password = secrets.token_urlsafe(10)
                         password_hash = make_password(password)
 
+                        if email and "@" not in email:
+                            email = ""
+
                         explicit_username = bool(username)
                         if explicit_username:
-                            username = username.strip()
+                            # Keep only characters Django usernames allow (no spaces).
+                            username = _username_base_from_identity(username=username.strip())
                             existing_user = User.objects.filter(username=username).first()
                             if existing_user:
                                 membership, created = UserProfile.objects.get_or_create(
@@ -1336,8 +1356,14 @@ def upload_students(request):
                 with transaction.atomic():
                     for idx, row in enumerate(rows, start=1):
                         full_name = row_lookup(
-                            row, "full_name", "name", "student_name", "student", "learner_name"
-                        )
+                            row,
+                            "full_name",
+                            "name",
+                            "student_name",
+                            "student",
+                            "learner_name",
+                            allow_lone_value=True,
+                        )[:200]
                         student_no = row_lookup(row, "student_no", "reg_no", "registration_no", "admission_no")
                         class_level = row_lookup(row, "class_level", "class", "form", "level", "grade").upper()
                         stream = row_lookup(row, "stream", "house")

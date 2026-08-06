@@ -173,8 +173,6 @@ class SchoolReRegistrationTests(TestCase):
 
 class SupervisorUploadTests(TestCase):
     def test_read_name_only_supervisor_list(self):
-        from io import BytesIO, StringIO
-
         from django.core.files.uploadedfile import SimpleUploadedFile
 
         from .upload_utils import read_supervisor_upload_table
@@ -191,3 +189,42 @@ class SupervisorUploadTests(TestCase):
             rows[0].get("full_name") or next(iter(rows[0].values())),
             "Mr. Were Matayo",
         )
+
+    def test_name_only_upload_creates_safe_usernames(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        from django.urls import reverse
+
+        from .models import Role, School, SchoolRegistrationStatus, UserProfile
+
+        school = School.objects.create(name="Upload HS", status=SchoolRegistrationStatus.APPROVED)
+        overall = User.objects.create_user("overall_up", "", "pass12345")
+        profile = UserProfile.objects.create(
+            user=overall,
+            school=school,
+            role=Role.OVERALL_SUPERVISOR,
+            school_password=overall.password,
+        )
+        self.client.force_login(overall)
+        session = self.client.session
+        session["active_membership_id"] = profile.id
+        session.save()
+
+        uploaded = SimpleUploadedFile(
+            "supervisors.csv",
+            b"Name\nMr. Were Matayo\nJane Okello\n",
+            content_type="text/csv",
+        )
+        response = self.client.post(reverse("upload_supervisors"), {"file": uploaded})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Content-Type"], "text/csv")
+        usernames = set(
+            User.objects.filter(memberships__school=school, memberships__role=Role.SUPERVISOR).values_list(
+                "username", flat=True
+            )
+        )
+        self.assertTrue(usernames)
+        for username in usernames:
+            self.assertNotIn(" ", username)
+            self.assertTrue(username.replace(".", "").replace("_", "").replace("-", "").isalnum())
+        self.assertIn("matayo", usernames)
+        self.assertIn("okello", usernames)

@@ -94,17 +94,22 @@ def parse_raw_table(
     return out
 
 
-def row_lookup(row: dict[str, str], *aliases: str) -> str:
-    """Find a cell value using flexible column header names."""
+def row_lookup(row: dict[str, str], *aliases: str, allow_lone_value: bool = False) -> str:
+    """Find a cell value using flexible column header names.
+
+    When allow_lone_value is True and the row has a single non-empty cell,
+    return that cell (used for name-only uploads). Never enable this for
+    email/username lookups — otherwise the person's name is mistaken for a login.
+    """
     norm = {normalize_header(k): (v or "").strip() for k, v in row.items()}
     for alias in aliases:
         val = norm.get(normalize_header(alias), "")
         if val:
             return val
-    # Single-column file where the "header" was actually the first name
-    non_empty = [v for v in row.values() if (v or "").strip()]
-    if len(non_empty) == 1:
-        return non_empty[0]
+    if allow_lone_value:
+        non_empty = [v for v in row.values() if (v or "").strip()]
+        if len(non_empty) == 1:
+            return non_empty[0]
     return ""
 
 
@@ -165,22 +170,22 @@ def load_upload_rows(uploaded_file) -> list[list]:
             "Save the file as .xlsx (Excel Workbook) or CSV and try again."
         )
 
+    raw = uploaded_file.read()
+    if not raw:
+        return []
+
     if name.endswith(".xlsx"):
         try:
-            wb = load_workbook(uploaded_file, data_only=True, read_only=True)
+            # BytesIO is more reliable than UploadedFile handles on Render/Gunicorn.
+            wb = load_workbook(io.BytesIO(raw), data_only=True)
             ws = wb.active
-            rows = [list(r) for r in ws.iter_rows(values_only=True)]
-            wb.close()
-            return rows
+            return [list(r) for r in ws.iter_rows(values_only=True)]
         except Exception as exc:
             raise ValueError(
                 "Could not read that Excel file. "
                 "Use a .xlsx workbook or CSV (UTF-8), and make sure the file is not corrupted."
             ) from exc
 
-    raw = uploaded_file.read()
-    if not raw:
-        return []
     try:
         text = raw.decode("utf-8-sig")
     except UnicodeDecodeError:
