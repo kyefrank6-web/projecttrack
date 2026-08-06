@@ -1320,10 +1320,21 @@ def upload_students(request):
     if not _is_overall(profile):
         raise Http404()
 
-    supervisor_map = {
-        p.user.username: p.user
-        for p in UserProfile.objects.select_related("user").filter(school=profile.school, role=Role.SUPERVISOR)
-    }
+    supervisor_memberships = list(
+        UserProfile.objects.select_related("user").filter(school=profile.school, role=Role.SUPERVISOR)
+    )
+    supervisor_by_name: dict[str, object] = {}
+    supervisor_by_username: dict[str, object] = {}
+    supervisor_display_names: list[str] = []
+    for membership in supervisor_memberships:
+        user = membership.user
+        display_name = (user.first_name or "").strip() or user.username
+        supervisor_display_names.append(display_name)
+        name_key = " ".join(display_name.lower().split())
+        if name_key and name_key not in supervisor_by_name:
+            supervisor_by_name[name_key] = user
+        supervisor_by_username[user.username.lower()] = user
+    supervisor_display_names = sorted(supervisor_display_names, key=str.casefold)
 
     if request.method == "POST":
         form = UploadFileForm(request.POST, request.FILES)
@@ -1344,7 +1355,7 @@ def upload_students(request):
                 messages.error(request, "File has no rows.")
                 return redirect("upload_students")
 
-            if not supervisor_map:
+            if not supervisor_memberships:
                 messages.error(
                     request,
                     "No supervisors found. Upload supervisors first, then upload students.",
@@ -1367,8 +1378,13 @@ def upload_students(request):
                         student_no = row_lookup(row, "student_no", "reg_no", "registration_no", "admission_no")
                         class_level = row_lookup(row, "class_level", "class", "form", "level", "grade").upper()
                         stream = row_lookup(row, "stream", "house")
-                        supervisor_username = row_lookup(
-                            row, "supervisor_username", "supervisor", "username", "supervisor_name"
+                        supervisor_ref = row_lookup(
+                            row,
+                            "supervisor_name",
+                            "supervisor_full_name",
+                            "supervisor",
+                            "supervisor_username",
+                            "username",
                         )
 
                         if not full_name:
@@ -1381,15 +1397,20 @@ def upload_students(request):
                             raise ValueError(
                                 f"Row {idx}: invalid class '{class_level}' (use S1, S2, S3, S4, S5, or S6)"
                             )
-                        if not supervisor_username:
+                        if not supervisor_ref:
                             raise ValueError(
                                 f"Row {idx}: missing supervisor. "
-                                f"Add supervisor_username column (must match an existing supervisor login)."
+                                f"Add a supervisor_name column with the supervisor's full name "
+                                f"(must match a supervisor already uploaded)."
                             )
-                        if supervisor_username not in supervisor_map:
+
+                        supervisor_user = supervisor_by_name.get(
+                            " ".join(supervisor_ref.lower().split())
+                        ) or supervisor_by_username.get(supervisor_ref.strip().lower())
+                        if not supervisor_user:
                             raise ValueError(
-                                f"Row {idx}: supervisor '{supervisor_username}' not found. "
-                                f"Upload supervisors first or check the username spelling."
+                                f"Row {idx}: supervisor '{supervisor_ref}' not found. "
+                                f"Use the supervisor's full name exactly as shown on the supervisors list."
                             )
 
                         Student.objects.create(
@@ -1398,7 +1419,7 @@ def upload_students(request):
                             student_no=student_no,
                             class_level=class_level,
                             stream=stream,
-                            supervisor=supervisor_map[supervisor_username],
+                            supervisor=supervisor_user,
                         )
                         created += 1
             except ValueError as exc:
@@ -1421,7 +1442,7 @@ def upload_students(request):
         "overall/upload_students.html",
         {
             "form": UploadFileForm(),
-            "supervisor_usernames": sorted(supervisor_map.keys()),
+            "supervisor_names": supervisor_display_names,
         },
     )
 

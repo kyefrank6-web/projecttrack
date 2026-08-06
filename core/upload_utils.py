@@ -25,6 +25,8 @@ STUDENT_HEADER_HINTS = {
     "class",
     "form",
     "level",
+    "supervisor_name",
+    "supervisor_full_name",
     "supervisor_username",
     "supervisor",
     "student_no",
@@ -33,7 +35,7 @@ STUDENT_HEADER_HINTS = {
 }
 
 SUPERVISOR_DEFAULT_COLUMNS = ["full_name", "email", "username"]
-STUDENT_DEFAULT_COLUMNS = ["full_name", "student_no", "class_level", "stream", "supervisor_username"]
+STUDENT_DEFAULT_COLUMNS = ["full_name", "student_no", "class_level", "stream", "supervisor_name"]
 SUPERVISOR_SIMPLE_COLUMNS = ["full_name"]
 
 

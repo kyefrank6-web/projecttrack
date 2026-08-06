@@ -22,7 +22,8 @@
         <div class="card-body p-4">
           <div class="alert alert-warning">
             <strong>Before uploading students:</strong> upload supervisors first. Each student must have a
-            <code>supervisor_username</code> that matches an existing supervisor login.
+            <code>supervisor_name</code> that matches an existing supervisor’s <strong>full name</strong>
+            (not their login username).
           </div>
           <div class="alert alert-info small mb-0">
             <strong>O-level vs A-level:</strong> S.1–S.4 follow the O-level cycle (end-of-year promotion moves them up; S.4 leavers graduate).
@@ -31,10 +32,10 @@
           </div>
 
           <div class="mt-3">
-          {% if supervisor_usernames %}
+          {% if supervisor_names %}
             <p class="small text-muted mb-3">
-              Available supervisor usernames:
-              <strong>{{ supervisor_usernames|join:", " }}</strong>
+              Available supervisor names:
+              <strong>{{ supervisor_names|join:", " }}</strong>
             </p>
           {% else %}
             <p class="small text-danger mb-3">No supervisors yet — upload supervisors first.</p>
@@ -51,7 +52,7 @@
                 <tr>
                   <th>full_name</th>
                   <th>class_level</th>
-                  <th>supervisor_username</th>
+                  <th>supervisor_name</th>
                   <th>student_no</th>
                   <th>stream</th>
                 </tr>
@@ -60,14 +61,14 @@
                 <tr>
                   <td>Amina Nakiito</td>
                   <td>S2</td>
-                  <td>jane</td>
+                  <td>Mr. Were Matayo</td>
                   <td>S123</td>
                   <td>Blue</td>
                 </tr>
                 <tr>
                   <td>Kato Peter</td>
                   <td>S2</td>
-                  <td>johnsup</td>
+                  <td>Jane Okello</td>
                   <td>S124</td>
                   <td>Red</td>
                 </tr>
@@ -76,7 +77,7 @@
           </div>
           <p class="small text-muted">
             Accepted header names include: <code>Name</code>, <code>Full Name</code>, <code>Class</code>,
-            <code>Supervisor</code>, etc.
+            <code>Supervisor</code>, <code>supervisor_name</code>, etc. Match the supervisor name exactly as listed above.
           </p>
 
           <form method="post" enctype="multipart/form-data" class="vstack gap-3">
