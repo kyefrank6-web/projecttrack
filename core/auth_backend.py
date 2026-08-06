@@ -20,6 +20,9 @@ def _password_grants_access(user, membership: UserProfile, password: str) -> boo
         return True
     if membership.role == Role.SUPERVISOR and check_password(password, user.password):
         return True
+    # Platform superadmin: accept the Django user password as well.
+    if membership.role == Role.SUPERADMIN and check_password(password, user.password):
+        return True
     return False
 
 
@@ -81,7 +84,25 @@ class SchoolScopedBackend(ModelBackend):
         memberships = list(
             UserProfile.objects.filter(user=user).select_related("school")
         )
+
+        # Platform admins created with createsuperuser may have no membership yet.
         if not memberships:
+            if user.check_password(password) and (user.is_superuser or user.is_staff):
+                profile, _ = UserProfile.objects.get_or_create(
+                    user=user,
+                    school=None,
+                    defaults={
+                        "role": Role.SUPERADMIN,
+                        "school_password": user.password,
+                    },
+                )
+                if profile.role != Role.SUPERADMIN:
+                    profile.role = Role.SUPERADMIN
+                    profile.school_password = user.password
+                    profile.save(update_fields=["role", "school_password"])
+                if request is not None:
+                    request.session["active_membership_id"] = profile.id
+                return user
             return None
 
         if not any(_password_grants_access(user, m, password) for m in memberships):
