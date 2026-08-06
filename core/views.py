@@ -1016,6 +1016,21 @@ def _read_uploaded_table(uploaded_file, *, upload_kind: str = "student") -> list
     return parse_raw_table(raw_rows, default_columns=default_columns, header_hints=header_hints)
 
 
+def _next_unique_username(base: str, reserved: set[str]) -> str:
+    """Pick a unique username using an in-memory reserved set (avoids N+1 DB hits)."""
+    candidate = (base or "user")[:140]
+    if candidate not in reserved:
+        reserved.add(candidate)
+        return candidate
+    suffix = 2
+    while True:
+        candidate = f"{(base or 'user')[:130]}{suffix}"
+        if candidate not in reserved:
+            reserved.add(candidate)
+            return candidate
+        suffix += 1
+
+
 @login_required
 def upload_supervisors(request):
     profile = _require_profile(request)
@@ -1025,13 +1040,32 @@ def upload_supervisors(request):
     if request.method == "POST":
         form = UploadFileForm(request.POST, request.FILES)
         if form.is_valid():
-            rows = read_supervisor_upload_table(form.cleaned_data["file"])
+            try:
+                rows = read_supervisor_upload_table(form.cleaned_data["file"])
+            except ValueError as exc:
+                messages.error(request, str(exc))
+                return redirect("upload_supervisors")
+            except Exception:
+                messages.error(
+                    request,
+                    "Could not read that file. Upload a CSV or Excel (.xlsx) file and try again.",
+                )
+                return redirect("upload_supervisors")
+
             if not rows:
                 messages.error(request, "File has no rows.")
                 return redirect("upload_supervisors")
 
+            if len(rows) > 300:
+                messages.error(
+                    request,
+                    f"This file has {len(rows)} rows. Upload at most 300 supervisors at a time "
+                    "(split the file and upload in batches).",
+                )
+                return redirect("upload_supervisors")
+
             created_credentials: list[dict[str, str]] = []
-            usernames_in_batch: set[str] = set()
+            reserved_usernames: set[str] = set(User.objects.values_list("username", flat=True))
             try:
                 with transaction.atomic():
                     for idx, row in enumerate(rows, start=1):
@@ -1092,29 +1126,32 @@ def upload_supervisors(request):
                                         "note": "Same username at multiple schools — use this school's password when logging in.",
                                     }
                                 )
-                                usernames_in_batch.add(username)
+                                reserved_usernames.add(username)
                                 continue
 
-                            username = _unique_username(username, reserved=usernames_in_batch)
+                            username = _next_unique_username(username, reserved_usernames)
                         else:
                             # Same display names are allowed — always create a distinct login.
-                            username = _unique_username(
+                            username = _next_unique_username(
                                 _username_base_from_identity(full_name=full_name, email=email),
-                                reserved=usernames_in_batch,
+                                reserved_usernames,
                             )
 
-                        user = User.objects.create_user(username=username, email=email, password=password)
-                        user.first_name = full_name
-                        user.save(update_fields=["first_name"])
+                        user = User(
+                            username=username,
+                            email=email or "",
+                            first_name=full_name,
+                        )
+                        user.password = password_hash
+                        user.save()
 
                         UserProfile.objects.create(
                             user=user,
                             school=profile.school,
                             role=Role.SUPERVISOR,
-                            school_password=user.password,
+                            school_password=password_hash,
                             must_change_password=True,
                         )
-                        usernames_in_batch.add(username)
                         created_credentials.append(
                             {
                                 "full_name": full_name,
@@ -1138,7 +1175,11 @@ def upload_supervisors(request):
                         "or leave the username column empty so the system generates unique logins.",
                     )
                     return redirect("upload_supervisors")
-                raise
+                messages.error(
+                    request,
+                    "Upload failed unexpectedly. Try a smaller CSV/.xlsx file, or add supervisors manually.",
+                )
+                return redirect("upload_supervisors")
 
             # Return credentials as downloadable CSV.
             out = io.StringIO()
@@ -1267,7 +1308,18 @@ def upload_students(request):
     if request.method == "POST":
         form = UploadFileForm(request.POST, request.FILES)
         if form.is_valid():
-            rows = _read_uploaded_table(form.cleaned_data["file"], upload_kind="student")
+            try:
+                rows = _read_uploaded_table(form.cleaned_data["file"], upload_kind="student")
+            except ValueError as exc:
+                messages.error(request, str(exc))
+                return redirect("upload_students")
+            except Exception:
+                messages.error(
+                    request,
+                    "Could not read that file. Upload a CSV or Excel (.xlsx) file and try again.",
+                )
+                return redirect("upload_students")
+
             if not rows:
                 messages.error(request, "File has no rows.")
                 return redirect("upload_students")
@@ -1325,6 +1377,12 @@ def upload_students(request):
                         created += 1
             except ValueError as exc:
                 messages.error(request, str(exc))
+                return redirect("upload_students")
+            except Exception:
+                messages.error(
+                    request,
+                    "Student upload failed unexpectedly. Check the file columns and try a smaller batch.",
+                )
                 return redirect("upload_students")
 
             messages.success(request, f"Uploaded {created} students.")

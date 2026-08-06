@@ -151,13 +151,36 @@ def load_upload_rows(uploaded_file) -> list[list]:
 
     from openpyxl import load_workbook
 
+    # Form / previous reads may leave the pointer at EOF.
+    if hasattr(uploaded_file, "seek"):
+        try:
+            uploaded_file.seek(0)
+        except Exception:
+            pass
+
     name = (getattr(uploaded_file, "name", "") or "").lower()
+    if name.endswith(".xls") and not name.endswith(".xlsx"):
+        raise ValueError(
+            "Old Excel .xls files are not supported. "
+            "Save the file as .xlsx (Excel Workbook) or CSV and try again."
+        )
+
     if name.endswith(".xlsx"):
-        wb = load_workbook(uploaded_file, data_only=True)
-        ws = wb.active
-        return [list(r) for r in ws.iter_rows(values_only=True)]
+        try:
+            wb = load_workbook(uploaded_file, data_only=True, read_only=True)
+            ws = wb.active
+            rows = [list(r) for r in ws.iter_rows(values_only=True)]
+            wb.close()
+            return rows
+        except Exception as exc:
+            raise ValueError(
+                "Could not read that Excel file. "
+                "Use a .xlsx workbook or CSV (UTF-8), and make sure the file is not corrupted."
+            ) from exc
 
     raw = uploaded_file.read()
+    if not raw:
+        return []
     try:
         text = raw.decode("utf-8-sig")
     except UnicodeDecodeError:
