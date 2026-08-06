@@ -153,18 +153,8 @@
 
   <script>
     (function () {
-      const username = document.getElementById("login-username");
       const input = document.getElementById("login-password");
       const btn = document.getElementById("toggle-password");
-
-      if (username) {
-        username.value = "";
-        username.setAttribute("autocomplete", "off");
-      }
-      if (input) {
-        input.value = "";
-      }
-
       if (!input || !btn) return;
 
       btn.addEventListener("click", function () {

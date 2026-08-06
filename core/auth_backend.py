@@ -77,9 +77,11 @@ class SchoolScopedBackend(ModelBackend):
             return None
 
         try:
-            user = User.objects.get(username=username)
+            user = User.objects.get(username__iexact=username.strip())
         except User.DoesNotExist:
             return None
+        except User.MultipleObjectsReturned:
+            user = User.objects.filter(username__iexact=username.strip()).order_by("id").first()
 
         memberships = list(
             UserProfile.objects.filter(user=user).select_related("school")
