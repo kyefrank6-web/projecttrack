@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block title %}School logo · ProjectTrack UG{% endblock %}
+
+{% block hero %}
+  <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between">
+    <div>
+      <h1 class="h4 mb-1">School logo</h1>
+      <div class="text-muted">Used on PDF score sheets and evidence reports</div>
+    </div>
+    <a class="btn btn-outline-light border" href="{% url 'overall_dashboard' %}">Back</a>
+  </div>
+{% endblock %}
+
+{% block content %}
+  <div class="row g-3">
+    <div class="col-12 col-md-5">
+      <div class="card">
+        <div class="card-body p-4">
+          <form method="post" enctype="multipart/form-data" class="vstack gap-3">
+            {% csrf_token %}
+            <div>
+              <label class="form-label">Upload logo (PNG or JPG)</label>
+              <input class="form-control" type="file" name="logo" accept="image/*" required />
+              <div class="form-text">Recommended: square image, at least 200×200 pixels.</div>
+            </div>
+            <button class="btn btn-primary" type="submit">Save logo</button>
+          </form>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-md-7">
+      <div class="card">
+        <div class="card-body p-4 text-center">
+          <h2 class="h6 text-muted mb-3">Current logo</h2>
+          {% if school.logo %}
+            <img src="{{ school.logo.url }}" alt="School logo" class="img-fluid rounded border" style="max-height: 200px" />
+          {% else %}
+            <p class="text-muted mb-0">No logo uploaded yet. PDFs will show the school name only.</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}

@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block title %}Registration rejected · ProjectTrack UG{% endblock %}
+
+{% block hero %}
+  <div>
+    <h1 class="h4 mb-1">Registration rejected</h1>
+    <div class="text-muted">{{ school.name }}</div>
+  </div>
+{% endblock %}
+
+{% block content %}
+  <div class="card">
+    <div class="card-body p-4">
+      <div class="alert alert-danger mb-3">
+        Your school registration was not approved.
+      </div>
+      {% if school.rejection_reason %}
+        <p><strong>Reason:</strong> {{ school.rejection_reason }}</p>
+      {% endif %}
+      <p class="text-muted">Contact the platform administrator if you believe this was a mistake.</p>
+      <form method="post" action="{% url 'logout' %}" class="mt-3">
+        {% csrf_token %}
+        <button class="btn btn-outline-secondary" type="submit">Logout</button>
+      </form>
+    </div>
+  </div>
+{% endblock %}

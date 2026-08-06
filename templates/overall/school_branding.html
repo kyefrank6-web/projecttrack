@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+
+{% block title %}School logo & theme · ProjectTrack UG{% endblock %}
+
+{% block head %}
+  <style>
+    .theme-option {
+      cursor: pointer;
+      border: 2px solid #dee2e6;
+      border-radius: 14px;
+      padding: 0.75rem;
+      transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .theme-option:has(input:checked) {
+      border-color: var(--pt-primary);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--pt-primary) 25%, transparent);
+    }
+    .theme-option input {
+      position: absolute;
+      opacity: 0;
+      pointer-events: none;
+    }
+    .theme-swatch {
+      height: 48px;
+      border-radius: 10px;
+      margin-bottom: 0.5rem;
+    }
+  </style>
+{% endblock %}
+
+{% block hero %}
+  <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between">
+    <div>
+      <h1 class="h4 mb-1">School profile & branding</h1>
+      <div class="text-muted">Logo, theme, motto, vision & mission — visible to all supervisors at your school</div>
+    </div>
+    <a class="btn btn-outline-light border" href="{% url 'overall_dashboard' %}">Back</a>
+  </div>
+{% endblock %}
+
+{% block content %}
+  <div class="row g-3">
+    <div class="col-12 col-lg-7">
+      <div class="card">
+        <div class="card-body p-4">
+          <form method="post" enctype="multipart/form-data" class="vstack gap-4">
+            {% csrf_token %}
+
+            <div>
+              <label class="form-label fw-semibold">Color theme</label>
+              <p class="text-muted small">Pick a theme for your school’s home page and navigation.</p>
+              <div class="row g-2">
+                {% for key, theme in theme_previews.items %}
+                  <div class="col-6 col-md-4">
+                    <label class="theme-option d-block h-100 mb-0">
+                      <input
+                        type="radio"
+                        name="theme"
+                        value="{{ key }}"
+                        {% if form.theme.value == key or not form.theme.value and key == 'royal_blue' %}checked{% endif %}
+                      />
+                      <div
+                        class="theme-swatch"
+                        style="background: linear-gradient(135deg, {{ theme.primary }} 0%, {{ theme.secondary }} 55%, {{ theme.accent }} 100%);"
+                      ></div>
+                      <span class="small fw-semibold">{{ theme.name }}</span>
+                    </label>
+                  </div>
+                {% endfor %}
+              </div>
+              {% for e in form.theme.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+            </div>
+
+            <div>
+              <label class="form-label fw-semibold">School logo</label>
+              <input class="form-control" type="file" name="logo" accept="image/*" />
+              <div class="form-text">PNG or JPG, square recommended (200×200 px or larger). Leave empty to keep current logo.</div>
+              {% for e in form.logo.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+            </div>
+
+            <div class="border-top pt-3">
+              <h2 class="h6 fw-semibold mb-3">School identity (home page)</h2>
+              <p class="text-muted small">All supervisors linked to {{ school.name }} will see these on the Home page.</p>
+              <div class="vstack gap-3">
+                <div>
+                  <label class="form-label" for="id_motto">{{ form.motto.label }}</label>
+                  {{ form.motto }}
+                  {% for e in form.motto.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+                </div>
+                <div>
+                  <label class="form-label" for="id_vision">{{ form.vision.label }}</label>
+                  {{ form.vision }}
+                  {% for e in form.vision.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+                </div>
+                <div>
+                  <label class="form-label" for="id_mission">{{ form.mission.label }}</label>
+                  {{ form.mission }}
+                  {% for e in form.mission.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+                </div>
+              </div>
+            </div>
+
+            <button class="btn btn-primary" type="submit">Save school profile</button>
+          </form>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-lg-5">
+      <div class="card">
+        <div class="card-body p-4 text-center">
+          <h2 class="h6 text-muted mb-3">Preview on home page</h2>
+          {% if school.logo %}
+            <img src="{{ school.logo.url }}" alt="School logo" class="img-fluid rounded border mb-3" style="max-height: 140px" />
+          {% else %}
+            <p class="text-muted small">Upload a logo to display it on the home page header.</p>
+          {% endif %}
+          <p class="mb-2 fw-semibold">{{ school.name }}</p>
+          {% if school.motto %}
+            <p class="small fst-italic text-muted mb-2">"{{ school.motto }}"</p>
+          {% endif %}
+          {% if school.vision %}
+            <p class="small text-start mb-1"><strong>Vision:</strong> {{ school.vision|truncatewords:24 }}</p>
+          {% endif %}
+          {% if school.mission %}
+            <p class="small text-start mb-0"><strong>Mission:</strong> {{ school.mission|truncatewords:24 }}</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}

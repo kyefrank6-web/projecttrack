@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+
+{% block title %}{{ school.name }} · Superadmin{% endblock %}
+
+{% block hero %}
+  <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between">
+    <div>
+      <h1 class="h4 mb-1">{{ school.name }}</h1>
+      <div class="text-muted">
+        Status:
+        <span class="badge text-bg-{% if school.status == 'approved' %}success{% elif school.status == 'rejected' %}danger{% else %}warning{% endif %}">
+          {{ school.get_status_display }}
+        </span>
+      </div>
+    </div>
+    <a class="btn btn-outline-light border" href="{% url 'superadmin_dashboard' %}">Back to list</a>
+  </div>
+{% endblock %}
+
+{% block content %}
+  <div class="row g-3">
+    <div class="col-12 col-lg-7">
+      <div class="card mb-3">
+        <div class="card-body">
+          <h2 class="h6">School information</h2>
+          <dl class="row mb-0 small">
+            <dt class="col-sm-4">Overall supervisor</dt>
+            <dd class="col-sm-8">
+              {% if school.overall_supervisor %}
+                {{ school.overall_supervisor.username }}
+                {% if school.overall_supervisor.email %} · {{ school.overall_supervisor.email }}{% endif %}
+              {% else %}
+                —
+              {% endif %}
+            </dd>
+            <dt class="col-sm-4">Supervisors</dt>
+            <dd class="col-sm-8">{{ supervisors_count }}</dd>
+            <dt class="col-sm-4">Students</dt>
+            <dd class="col-sm-8">{{ students_count }}</dd>
+            <dt class="col-sm-4">Registered</dt>
+            <dd class="col-sm-8">{{ school.created_at|date:"M j, Y H:i" }}</dd>
+            {% if school.reviewed_at %}
+              <dt class="col-sm-4">Last reviewed</dt>
+              <dd class="col-sm-8">{{ school.reviewed_at|date:"M j, Y H:i" }}</dd>
+            {% endif %}
+            {% if school.rejection_reason %}
+              <dt class="col-sm-4">Rejection reason</dt>
+              <dd class="col-sm-8">{{ school.rejection_reason }}</dd>
+            {% endif %}
+          </dl>
+        </div>
+      </div>
+
+      {% if school.status != 'approved' %}
+        <div class="card mb-3 border-success">
+          <div class="card-body">
+            <h2 class="h6 text-success">Approve school</h2>
+            <p class="small text-muted">The overall supervisor and their team can use the system after approval.</p>
+            <form method="post" action="{% url 'superadmin_approve_school' school.id %}">
+              {% csrf_token %}
+              <button class="btn btn-success" type="submit">Approve registration</button>
+            </form>
+          </div>
+        </div>
+      {% endif %}
+
+      {% if school.status != 'rejected' %}
+        <div class="card mb-3 border-warning">
+          <div class="card-body">
+            <h2 class="h6">Reject registration</h2>
+            <form method="post" action="{% url 'superadmin_reject_school' school.id %}" class="vstack gap-2">
+              {% csrf_token %}
+              {{ reject_form.rejection_reason }}
+              <button class="btn btn-warning" type="submit">Reject registration</button>
+            </form>
+          </div>
+        </div>
+      {% endif %}
+
+      <div class="card border-danger">
+        <div class="card-body">
+          <h2 class="h6 text-danger">Delete school permanently</h2>
+          <p class="small text-muted mb-3">
+            Removes the school, all users, students, scores, evidence photos, and logo. This cannot be undone.
+            The school can register again afterward and must be approved before use.
+          </p>
+          <form method="post" action="{% url 'superadmin_delete_school' school.id %}" onsubmit="return confirm('Delete {{ school.name }} and ALL related data permanently?');">
+            {% csrf_token %}
+            <button class="btn btn-danger" type="submit">Delete school</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}

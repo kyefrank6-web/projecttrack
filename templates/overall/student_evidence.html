@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block title %}Evidence photos · ProjectTrack UG{% endblock %}
+
+{% block hero %}
+  <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between">
+    <div>
+      <h1 class="h4 mb-1">Photo evidence</h1>
+      <div class="text-muted">
+        <strong>{{ student.full_name }}</strong> · {{ student.class_level }}
+        <br />Project title: <strong>{{ student.project_title|default:"—" }}</strong>
+        <br />Supervisor: {{ student.supervisor.username }}
+      </div>
+    </div>
+    <a class="btn btn-outline-light border" href="{% url 'overall_evidence_index' %}">Back</a>
+  </div>
+{% endblock %}
+
+{% block content %}
+  <div class="mb-3">
+    {% if evidence_complete %}
+      <span class="badge text-bg-success">All 3 categories uploaded</span>
+    {% else %}
+      <span class="badge text-bg-warning">Incomplete — {{ required_photos }} photos required</span>
+    {% endif %}
+  </div>
+
+  <div class="row g-3">
+    {% for slot in evidence_slots %}
+      <div class="col-12 col-md-4">
+        <div class="card h-100 {% if slot.photo %}border-success{% else %}border-warning{% endif %}">
+          <div class="card-body">
+            <h2 class="h6 fw-semibold">{{ slot.label }}</h2>
+            {% if slot.photo %}
+              <img
+                src="{{ slot.photo.file.url }}"
+                alt="{{ slot.label }}"
+                class="img-fluid rounded border mb-2"
+                style="max-height: 200px; object-fit: cover; width: 100%"
+              />
+              <p class="small text-muted mb-2">
+                By {{ slot.photo.uploaded_by.username }} · {{ slot.photo.uploaded_at|date:"M j, Y g:i A" }}
+              </p>
+              <div class="d-flex gap-1 flex-wrap">
+                <a class="btn btn-sm btn-outline-primary" href="{{ slot.photo.file.url }}" target="_blank" rel="noreferrer">View</a>
+                <a class="btn btn-sm btn-outline-success" href="{% url 'download_evidence' slot.photo.id %}">Download</a>
+              </div>
+            {% else %}
+              <p class="text-muted mb-0">Not uploaded yet.</p>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+{% endblock %}

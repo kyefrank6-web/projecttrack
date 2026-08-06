@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block title %}Evidence photos · ProjectTrack UG{% endblock %}
+
+{% block hero %}
+  <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between">
+    <div>
+      <h1 class="h4 mb-1">Project evidence photos</h1>
+      <div class="text-muted">
+        {{ student.full_name }} · {{ student.class_level }} {{ student.stream }}
+        {% if student.project_title %}<br />Project: <strong>{{ student.project_title }}</strong>{% endif %}
+      </div>
+    </div>
+    <a class="btn btn-outline-light border" href="{% url 'supervisor_evidence_index' %}?class={{ student.class_level }}">Back</a>
+  </div>
+{% endblock %}
+
+{% block content %}
+  <div class="alert alert-info">
+  Upload <strong>one photo per category</strong> (3 required):
+  {% if evidence_complete %}
+    <span class="badge text-bg-success ms-1">Complete (3/3)</span>
+  {% else %}
+    <span class="badge text-bg-warning ms-1">{{ evidence_count }}/3 uploaded</span>
+  {% endif %}
+  </div>
+
+  <form method="post" enctype="multipart/form-data">
+    {% csrf_token %}
+    <div class="row g-3">
+      {% for slot in evidence_slots %}
+        <div class="col-12 col-md-4">
+          <div class="card h-100 {% if slot.photo %}border-success{% endif %}">
+            <div class="card-body">
+              <h2 class="h6 fw-semibold text-primary">{{ slot.label }}</h2>
+              {% if slot.photo %}
+                <div class="mb-2">
+                  <img
+                    src="{{ slot.photo.file.url }}"
+                    alt="{{ slot.label }}"
+                    class="img-fluid rounded border"
+                    style="max-height: 160px; object-fit: cover; width: 100%"
+                  />
+                </div>
+                <p class="small text-muted mb-2">Uploaded {{ slot.photo.uploaded_at|date:"M j, Y g:i A" }}</p>
+                <div class="d-flex gap-1 flex-wrap mb-3">
+                  <a class="btn btn-sm btn-outline-primary" href="{{ slot.photo.file.url }}" target="_blank" rel="noreferrer">
+                    View
+                  </a>
+                  <a class="btn btn-sm btn-outline-success" href="{% url 'download_evidence' slot.photo.id %}">Download</a>
+                </div>
+              {% else %}
+                <p class="small text-muted">No photo uploaded yet for this category.</p>
+              {% endif %}
+              <label class="form-label small">{% if slot.photo %}Replace photo{% else %}Upload photo{% endif %}</label>
+              <input
+                class="form-control"
+                type="file"
+                name="{{ slot.field_name }}"
+                accept="image/*"
+              />
+            </div>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+    <div class="mt-4">
+      <button class="btn btn-success btn-lg" type="submit">Save evidence photos</button>
+    </div>
+  </form>
+{% endblock %}

@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block title %}Add supervisor · ProjectTrack UG{% endblock %}
+
+{% block hero %}
+  <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between">
+    <div>
+      <h1 class="h4 mb-1">Add supervisor manually</h1>
+      <div class="text-muted">Create one supervisor account with a one-time login password</div>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <a class="btn btn-outline-light border" href="{% url 'upload_supervisors' %}">Bulk upload</a>
+      <a class="btn btn-outline-light border" href="{% url 'overall_supervisors' %}">Back</a>
+    </div>
+  </div>
+{% endblock %}
+
+{% block content %}
+  <div class="row g-3">
+    <div class="col-12 col-lg-7">
+      {% if created_credentials %}
+        <div class="alert alert-success">
+          <strong>Supervisor added.</strong> Share these one-time login details (school name required at login if they use multiple schools). They must change the password on first login:
+          <ul class="mb-0 mt-2">
+            <li><strong>Name:</strong> {{ created_credentials.full_name }}</li>
+            <li><strong>Username:</strong> <code>{{ created_credentials.username }}</code></li>
+            <li><strong>One-time password:</strong> <code>{{ created_credentials.password }}</code></li>
+            <li><strong>School:</strong> {{ created_credentials.school }}</li>
+            {% if created_credentials.email %}
+              <li><strong>Email:</strong> {{ created_credentials.email }}</li>
+            {% endif %}
+            {% if created_credentials.note %}
+              <li class="text-muted small">{{ created_credentials.note }}</li>
+            {% endif %}
+          </ul>
+        </div>
+      {% endif %}
+
+      <div class="card">
+        <div class="card-body p-4">
+          <form method="post" class="vstack gap-3">
+            {% csrf_token %}
+
+            <div>
+              <label class="form-label">{{ form.full_name.label }}</label>
+              {{ form.full_name }}
+              {% for e in form.full_name.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+            </div>
+
+            <div>
+              <label class="form-label">{{ form.email.label }}</label>
+              {{ form.email }}
+              {% for e in form.email.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+            </div>
+
+            <div>
+              <label class="form-label">{{ form.username.label }}</label>
+              {{ form.username }}
+              {% if form.username.help_text %}<div class="form-text">{{ form.username.help_text }}</div>{% endif %}
+              {% for e in form.username.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+            </div>
+
+            <div>
+              <label class="form-label">{{ form.password.label }}</label>
+              {{ form.password }}
+              {% if form.password.help_text %}<div class="form-text">{{ form.password.help_text }}</div>{% endif %}
+              {% for e in form.password.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+            </div>
+
+            <button class="btn btn-primary" type="submit">Add supervisor</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}

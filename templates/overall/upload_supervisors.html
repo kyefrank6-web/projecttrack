@@ -1,0 +1,272 @@
+{% extends "base.html" %}
+
+
+
+
+
+
+
+{% block title %}Upload supervisors · ProjectTrack UG{% endblock %}
+
+
+
+
+
+
+
+{% block hero %}
+
+
+
+  <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between">
+
+
+
+    <div>
+
+
+
+      <h1 class="h4 mb-1">Upload supervisors</h1>
+
+
+
+      <div class="text-muted">Bulk add supervisors and auto-generate one-time login passwords</div>
+
+
+
+    </div>
+
+
+
+    <div class="d-flex gap-2 flex-wrap">
+
+      <a class="btn btn-primary" href="{% url 'overall_add_supervisor' %}">Add manually</a>
+
+      <a class="btn btn-outline-light border" href="{% url 'overall_dashboard' %}">Back</a>
+
+    </div>
+
+
+
+  </div>
+
+
+
+{% endblock %}
+
+
+
+
+
+
+
+{% block content %}
+
+
+
+  <div class="row g-3">
+
+
+
+    <div class="col-12 col-lg-7">
+
+
+
+      <div class="card">
+
+
+
+        <div class="card-body p-4">
+
+
+
+          <p class="text-muted">
+
+            Upload a <strong>CSV</strong> or <strong>Excel (.xlsx)</strong> file containing
+
+            <strong>supervisor names only</strong> — one name per row. Email and username are optional;
+
+            the system generates secure one-time login passwords for you.
+
+          </p>
+
+
+
+          <div class="alert alert-info small mb-3">
+
+            <strong>Name-only list (recommended):</strong> put one supervisor name on each row, with or without a header.
+
+            Examples: <code>Mr. Were Matayo</code> on row 1, or a column headed <code>Name</code> with names below.
+
+          </div>
+
+
+
+          <p class="text-muted small mb-2">Optional: include extra columns if you already have them</p>
+
+
+
+          <div class="table-responsive mb-3">
+
+
+
+            <table class="table table-sm table-bordered">
+
+
+
+              <thead class="table-light">
+
+
+
+                <tr>
+
+
+
+                  <th>full_name</th>
+
+
+
+                  <th>email</th>
+
+
+
+                  <th>username</th>
+
+
+
+                </tr>
+
+
+
+              </thead>
+
+
+
+              <tbody>
+
+
+
+                <tr>
+
+
+
+                  <td>Mr. Were Matayo</td>
+
+
+
+                  <td>were@school.ug</td>
+
+
+
+                  <td>were</td>
+
+
+
+                </tr>
+
+
+
+                <tr>
+
+
+
+                  <td>Jane Okello</td>
+
+
+
+                  <td></td>
+
+
+
+                  <td></td>
+
+
+
+                </tr>
+
+
+
+              </tbody>
+
+
+
+            </table>
+
+
+
+            <p class="small text-muted mb-0">
+
+              Only <code>full_name</code> / <code>name</code> is required.
+              The same display names are allowed — each person gets a distinct login username.
+              <code>email</code> and <code>username</code> are optional; one-time passwords are auto-generated.
+
+            </p>
+
+            <p class="small text-muted mb-0 mt-2">
+
+              After upload, a CSV download lists every generated username and one-time password.
+
+              Supervisors must change that password on first login.
+
+            </p>
+
+
+
+          </div>
+
+
+
+
+
+
+
+          <form method="post" enctype="multipart/form-data" class="vstack gap-3">
+
+
+
+            {% csrf_token %}
+
+
+
+            <div>
+
+
+
+              <label class="form-label">File (CSV or Excel)</label>
+
+
+
+              <input class="form-control" type="file" name="file" accept=".csv,.xlsx" required />
+
+
+
+            </div>
+
+
+
+            <button class="btn btn-primary" type="submit">Upload and generate one-time logins</button>
+
+
+
+          </form>
+
+
+
+        </div>
+
+
+
+      </div>
+
+
+
+    </div>
+
+
+
+  </div>
+
+
+
+{% endblock %}
+

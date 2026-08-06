@@ -1,0 +1,514 @@
+{% extends "base.html" %}
+{% load core_extras %}
+
+{% block title %}{% if unassigned_only %}Students without supervisor{% else %}All students{% endif %} · ProjectTrack UG{% endblock %}
+
+{% block head %}
+  <style>
+    .roster-hero-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      margin-top: 0.75rem;
+    }
+    .roster-stat {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      padding: 0.35rem 0.75rem;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.72);
+      border: 1px solid rgba(15, 23, 42, 0.06);
+      color: #334155;
+      font-size: 0.8125rem;
+      font-weight: 600;
+    }
+    .roster-stat strong {
+      color: var(--pt-primary);
+      font-variant-numeric: tabular-nums;
+    }
+    .roster-stat.warn strong {
+      color: #b45309;
+    }
+    .roster-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+      padding: 0.35rem;
+      background: #fff;
+      border-radius: 14px;
+      border: 1px solid rgba(15, 23, 42, 0.06);
+      box-shadow: 0 8px 24px rgba(15, 23, 42, 0.04);
+    }
+    .roster-tabs a {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.55rem 0.95rem;
+      border-radius: 10px;
+      text-decoration: none;
+      color: #475569;
+      font-weight: 600;
+      font-size: 0.9rem;
+      transition: background-color 0.15s ease, color 0.15s ease;
+    }
+    .roster-tabs a:hover {
+      background: #f1f5f9;
+      color: #0f172a;
+    }
+    .roster-tabs a.active {
+      background: color-mix(in srgb, var(--pt-primary) 12%, #fff);
+      color: var(--pt-primary-dark);
+    }
+    .roster-tabs .tab-count {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 1.4rem;
+      padding: 0.1rem 0.4rem;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      background: #fef3c7;
+      color: #92400e;
+    }
+    .roster-tabs a.active .tab-count {
+      background: #fff;
+      color: var(--pt-primary-dark);
+    }
+    .roster-toolbar,
+    .roster-panel {
+      border: none;
+      overflow: hidden;
+    }
+    .roster-panel .panel-head {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      padding: 1rem 1.25rem;
+      border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+      background: linear-gradient(180deg, #fbfcfe 0%, #fff 100%);
+    }
+    .roster-panel .panel-head h2 {
+      font-size: 0.95rem;
+      font-weight: 700;
+      margin: 0;
+      color: #0f172a;
+    }
+    .roster-table {
+      margin: 0;
+      --bs-table-bg: transparent;
+    }
+    .roster-table thead th {
+      font-size: 0.72rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: #64748b;
+      font-weight: 700;
+      border-bottom-width: 1px;
+      background: #f8fafc;
+      padding: 0.85rem 1.1rem;
+      white-space: nowrap;
+    }
+    .roster-table tbody td {
+      padding: 0.95rem 1.1rem;
+      border-color: rgba(15, 23, 42, 0.05);
+      vertical-align: middle;
+    }
+    .roster-table tbody tr {
+      transition: background-color 0.15s ease;
+    }
+    .roster-table tbody tr:hover {
+      background: color-mix(in srgb, var(--pt-primary) 4%, #fff);
+    }
+    .person-cell {
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+      min-width: 0;
+    }
+    .person-avatar {
+      width: 2.4rem;
+      height: 2.4rem;
+      border-radius: 12px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      font-weight: 700;
+      font-size: 0.82rem;
+      color: #fff;
+      background: linear-gradient(145deg, var(--pt-accent), var(--pt-primary));
+      box-shadow: 0 6px 14px color-mix(in srgb, var(--pt-accent) 24%, transparent);
+    }
+    .person-name {
+      display: block;
+      font-weight: 600;
+      color: #0f172a;
+      line-height: 1.25;
+    }
+    .person-sub {
+      display: block;
+      font-size: 0.78rem;
+      color: #64748b;
+      margin-top: 0.1rem;
+    }
+    .class-chip {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.25rem 0.6rem;
+      border-radius: 8px;
+      background: color-mix(in srgb, var(--pt-primary) 12%, #fff);
+      color: var(--pt-primary-dark);
+      font-weight: 700;
+      font-size: 0.8rem;
+    }
+    .stream-text,
+    .meta-muted {
+      color: #64748b;
+      font-size: 0.875rem;
+    }
+    .supervisor-chip {
+      display: inline-flex;
+      align-items: center;
+      max-width: 12rem;
+      padding: 0.2rem 0.55rem;
+      border-radius: 8px;
+      background: #f1f5f9;
+      color: #334155;
+      font-size: 0.8rem;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .unassigned-chip {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.2rem 0.55rem;
+      border-radius: 8px;
+      background: #fef3c7;
+      color: #92400e;
+      font-size: 0.78rem;
+      font-weight: 700;
+    }
+    .project-cell {
+      max-width: 14rem;
+      color: #475569;
+      font-size: 0.85rem;
+      line-height: 1.35;
+    }
+    .assign-form {
+      display: flex;
+      gap: 0.45rem;
+      align-items: center;
+      flex-wrap: wrap;
+      min-width: 15rem;
+    }
+    .assign-form .form-select {
+      min-width: 11rem;
+      border-radius: 10px;
+    }
+    .student-actions {
+      display: flex;
+      gap: 0.4rem;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .hint-banner {
+      border: none;
+      border-left: 4px solid #f59e0b;
+      background: #fffbeb;
+      border-radius: 12px;
+    }
+    .roster-empty {
+      text-align: center;
+      padding: 3rem 1.5rem;
+    }
+    .roster-empty-icon {
+      width: 3.5rem;
+      height: 3.5rem;
+      margin: 0 auto 1rem;
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: color-mix(in srgb, var(--pt-primary) 10%, #fff);
+      color: var(--pt-primary);
+    }
+  </style>
+{% endblock %}
+
+{% block hero %}
+  <div class="d-flex flex-wrap gap-3 align-items-start justify-content-between">
+    <div>
+      <h1 class="h4 mb-1">
+        {% if unassigned_only %}Students without supervisor{% else %}All students{% endif %}
+      </h1>
+      <div class="text-muted">
+        {% if unassigned_only %}
+          Assign each learner to a project supervisor
+        {% else %}
+          Review, edit, and manage every learner at your school
+        {% endif %}
+      </div>
+      <div class="roster-hero-meta">
+        <span class="roster-stat">
+          Registered
+          <strong>{{ total_students }}</strong>
+        </span>
+        {% if unassigned_count %}
+          <span class="roster-stat warn">
+            Unassigned
+            <strong>{{ unassigned_count }}</strong>
+          </span>
+        {% endif %}
+        {% if search_q or class_level %}
+          <span class="roster-stat">
+            Showing
+            <strong>{{ filtered_students }}</strong>
+          </span>
+        {% endif %}
+      </div>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <a class="btn btn-outline-light border" href="{% url 'overall_dashboard' %}">Back</a>
+      {% if not unassigned_only %}
+        <a class="btn btn-outline-light border" href="{% url 'upload_students' %}">Bulk upload</a>
+        {% if total_students %}
+          <form
+            method="post"
+            action="{% url 'overall_delete_all_students' %}"
+            class="d-inline"
+            onsubmit="return confirm('Permanently delete ALL {{ total_students }} student(s) at this school?\n\nThis also deletes their scores and evidence photos. This cannot be undone.');"
+          >
+            {% csrf_token %}
+            <button class="btn btn-outline-danger" type="submit">Delete all</button>
+          </form>
+        {% endif %}
+      {% endif %}
+      <a class="btn btn-primary" href="{% url 'overall_add_student' %}">Add student</a>
+    </div>
+  </div>
+{% endblock %}
+
+{% block content %}
+  <nav class="roster-tabs" aria-label="Student lists">
+    <a
+      class="{% if not unassigned_only %}active{% endif %}"
+      href="{% url 'overall_students' %}"
+    >
+      All students
+    </a>
+    <a
+      class="{% if unassigned_only %}active{% endif %}"
+      href="{% url 'overall_students_unassigned' %}"
+    >
+      Without supervisor
+      {% if unassigned_count %}
+        <span class="tab-count">{{ unassigned_count }}</span>
+      {% endif %}
+    </a>
+  </nav>
+
+  {% if unassigned_only %}
+    <div class="card hint-banner mb-3">
+      <div class="card-body py-3 small">
+        {% if school_supervisors %}
+          Choose a supervisor for each learner, then click <strong>Assign</strong>.
+          Supervisors can then score and upload evidence for that student.
+        {% else %}
+          No supervisors at your school yet.
+          <a href="{% url 'overall_add_supervisor' %}">Add a supervisor</a> before you can assign learners.
+        {% endif %}
+      </div>
+    </div>
+  {% endif %}
+
+  <div class="card roster-toolbar mb-3">
+    <div class="card-body py-3">
+      <form method="get" class="row g-2 align-items-end">
+        <div class="col-md-5">
+          <label class="form-label small text-muted mb-1" for="students-search">Search</label>
+          <input
+            id="students-search"
+            class="form-control"
+            type="search"
+            name="q"
+            value="{{ search_q }}"
+            placeholder="Name, student number, title, stream…"
+            autocomplete="off"
+          />
+        </div>
+        <div class="col-md-3">
+          <label class="form-label small text-muted mb-1" for="students-class">Class</label>
+          <select id="students-class" class="form-select" name="class">
+            <option value="">All classes</option>
+            {% for c in class_levels %}
+              <option value="{{ c }}" {% if class_level == c %}selected{% endif %}>
+                {{ c }}{% if class_counts|get_item:c %} ({{ class_counts|get_item:c }}){% endif %}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-4 d-flex gap-2 flex-wrap">
+          <button class="btn btn-primary" type="submit">Apply filters</button>
+          {% if search_q or class_level %}
+            <a
+              class="btn btn-outline-secondary"
+              href="{% if unassigned_only %}{% url 'overall_students_unassigned' %}{% else %}{% url 'overall_students' %}{% endif %}"
+            >
+              Clear
+            </a>
+          {% endif %}
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card roster-panel">
+    <div class="panel-head">
+      <h2>
+        {% if unassigned_only %}
+          Unassigned learners
+        {% elif search_q or class_level %}
+          Filtered results
+        {% else %}
+          Student roster
+        {% endif %}
+      </h2>
+      <span class="text-muted small">Sorted A–Z by name</span>
+    </div>
+
+    {% if students %}
+      <div class="table-responsive">
+        <table class="table roster-table align-middle mb-0">
+          <thead>
+            <tr>
+              <th>Student</th>
+              <th>Class</th>
+              <th>Stream</th>
+              {% if not unassigned_only %}
+                <th>Supervisor</th>
+              {% elif school_supervisors %}
+                <th>Assign supervisor</th>
+              {% endif %}
+              <th>Project</th>
+              <th class="text-end">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for student in students %}
+              <tr>
+                <td>
+                  <div class="person-cell">
+                    <span class="person-avatar" aria-hidden="true">
+                      {{ student.full_name|make_list|first|upper }}
+                    </span>
+                    <div class="min-w-0">
+                      <span class="person-name">{{ student.full_name }}</span>
+                      <span class="person-sub">
+                        {% if student.student_no %}No. {{ student.student_no }}{% else %}No student number{% endif %}
+                      </span>
+                    </div>
+                  </div>
+                </td>
+                <td><span class="class-chip">{{ student.class_level }}</span></td>
+                <td class="stream-text">{{ student.stream|default:"—" }}</td>
+                {% if not unassigned_only %}
+                  <td>
+                    {% if student.supervisor %}
+                      <span class="supervisor-chip" title="@{{ student.supervisor.username }}">
+                        {% if student.supervisor.get_full_name %}
+                          {{ student.supervisor.get_full_name }}
+                        {% else %}
+                          {{ student.supervisor.username }}
+                        {% endif %}
+                      </span>
+                    {% else %}
+                      <span class="unassigned-chip">Unassigned</span>
+                    {% endif %}
+                  </td>
+                {% elif school_supervisors %}
+                  <td>
+                    <form
+                      method="post"
+                      action="{% url 'overall_assign_student_supervisor' student.id %}"
+                      class="assign-form"
+                    >
+                      {% csrf_token %}
+                      <select name="supervisor" class="form-select form-select-sm" required>
+                        <option value="">Choose supervisor…</option>
+                        {% for membership in school_supervisors %}
+                          <option value="{{ membership.user.id }}">
+                            {% if membership.user.get_full_name %}{{ membership.user.get_full_name }}{% else %}{{ membership.user.username }}{% endif %}
+                          </option>
+                        {% endfor %}
+                      </select>
+                      <button class="btn btn-sm btn-primary" type="submit">Assign</button>
+                    </form>
+                  </td>
+                {% endif %}
+                <td>
+                  <div class="project-cell" title="{{ student.project_title }}">
+                    {{ student.project_title|default:"—" }}
+                  </div>
+                </td>
+                <td class="text-end">
+                  <div class="student-actions justify-content-end">
+                    <a
+                      class="btn btn-sm btn-outline-secondary"
+                      href="{% url 'overall_edit_student' student.id %}"
+                    >
+                      Edit
+                    </a>
+                    <form
+                      method="post"
+                      action="{% url 'overall_delete_student' student.id %}{% if search_q or class_level %}?{% endif %}{% if search_q %}q={{ search_q|urlencode }}{% endif %}{% if search_q and class_level %}&{% endif %}{% if class_level %}class={{ class_level }}{% endif %}"
+                      class="d-inline"
+                      onsubmit="return confirm('Permanently delete {{ student.full_name }}? All scores, observations, and photos for this learner will be removed.');"
+                    >
+                      {% csrf_token %}
+                      <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
+                    </form>
+                  </div>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="roster-empty">
+        <div class="roster-empty-icon" aria-hidden="true">
+          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill="currentColor" viewBox="0 0 16 16">
+            <path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm2-3a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm4 8c0 1-1 1-1 1H3s-1 0-1-1 1-4 6-4 6 3 6 4zm-1-.004c-.001-.246-.154-.986-.832-1.664C11.516 10.68 10.289 10 8 10c-2.29 0-3.516.68-4.168 1.332-.678.678-.83 1.418-.832 1.664h10z"/>
+          </svg>
+        </div>
+        {% if search_q or class_level %}
+          <h3 class="h6 mb-1">No students match your filters</h3>
+          <p class="text-muted small mb-3">Try another search or clear the class filter.</p>
+          <a
+            class="btn btn-outline-primary btn-sm"
+            href="{% if unassigned_only %}{% url 'overall_students_unassigned' %}{% else %}{% url 'overall_students' %}{% endif %}"
+          >
+            Clear filters
+          </a>
+        {% elif unassigned_only %}
+          <h3 class="h6 mb-1">All students have supervisors</h3>
+          <p class="text-muted small mb-0">Every learner at your school is already assigned.</p>
+        {% else %}
+          <h3 class="h6 mb-1">No students yet</h3>
+          <p class="text-muted small mb-3">Add learners one by one or upload a full class list.</p>
+          <div class="d-flex justify-content-center gap-2 flex-wrap">
+            <a class="btn btn-primary btn-sm" href="{% url 'overall_add_student' %}">Add student</a>
+            <a class="btn btn-outline-primary btn-sm" href="{% url 'upload_students' %}">Bulk upload</a>
+          </div>
+        {% endif %}
+      </div>
+    {% endif %}
+  </div>
+{% endblock %}

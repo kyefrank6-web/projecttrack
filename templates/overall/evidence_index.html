@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+
+{% block title %}Photo evidence · ProjectTrack UG{% endblock %}
+
+{% block hero %}
+  <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between">
+    <div>
+      <h1 class="h4 mb-1">Photo evidence</h1>
+      <div class="text-muted">View project photos uploaded for each student</div>
+    </div>
+    <a class="btn btn-outline-light border" href="{% url 'overall_dashboard' %}">Back</a>
+  </div>
+{% endblock %}
+
+{% block content %}
+  <div class="card mb-3">
+    <div class="card-body">
+      <form method="get" class="row g-2 align-items-end">
+        <div class="col-auto">
+          <label class="form-label">Filter by class</label>
+          <select class="form-select" name="class" onchange="this.form.submit()">
+            <option value="">All classes</option>
+            {% for c in class_levels %}
+              <option value="{{ c }}" {% if class_level == c %}selected{% endif %}>{{ c }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        {% if class_level %}
+          <div class="col-auto">
+            <a class="btn btn-danger" href="{% url 'export_class_evidence_pdf' class_level %}">
+              Download {{ class_level }} evidence (PDF)
+            </a>
+          </div>
+        {% endif %}
+      </form>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-body">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Student</th>
+              <th>Project title</th>
+              <th>Class</th>
+              <th>Stream</th>
+              <th>Supervisor</th>
+              <th>Evidence (3)</th>
+              <th style="width: 140px">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in rows %}
+              <tr>
+                <td class="fw-semibold">{{ row.student.full_name }}</td>
+                <td class="small">{{ row.student.project_title|default:"—" }}</td>
+                <td>{{ row.student.class_level }}</td>
+                <td>{{ row.student.stream }}</td>
+                <td>{{ row.student.supervisor.username }}</td>
+                <td>
+                  {% if row.evidence_complete %}
+                    <span class="badge text-bg-success">3/3 Complete</span>
+                  {% else %}
+                    <span class="badge text-bg-warning">{{ row.photo_count }}/3</span>
+                  {% endif %}
+                </td>
+                <td class="d-flex gap-1 flex-wrap">
+                  <a class="btn btn-sm btn-outline-secondary" href="{% url 'overall_edit_student' row.student.id %}">
+                    Edit info
+                  </a>
+                  <a class="btn btn-sm btn-outline-primary" href="{% url 'overall_student_evidence' row.student.id %}">
+                    Photos
+                  </a>
+                </td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="7" class="text-muted">No students found.</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+{% endblock %}

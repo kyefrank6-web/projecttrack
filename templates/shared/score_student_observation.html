@@ -1,0 +1,246 @@
+{% extends "base.html" %}
+{% load core_extras %}
+
+{% block title %}{{ page_title }} · ProjectTrack UG{% endblock %}
+
+{% block hero %}
+  <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between">
+    <div>
+      <h1 class="h4 mb-1">{{ page_title }}</h1>
+      <div class="text-muted">
+        {{ student.full_name }} · {{ student.class_level }} {{ student.stream }}
+        {% if student.project_title %}<br />Project: <strong>{{ student.project_title }}</strong>{% endif %}
+      </div>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      {% if observation_pdf_url %}
+        <a class="btn btn-danger" href="{{ observation_pdf_url }}">Download scored checklist (PDF)</a>
+      {% endif %}
+      <a class="btn btn-outline-light border" href="{{ back_url }}">Back</a>
+    </div>
+  </div>
+{% endblock %}
+
+{% block content %}
+  {% if read_only_observation %}
+    <div class="alert alert-secondary">
+      Read-only view of how this learner was scored on the observation checklist.
+      {% if observation_pdf_url %}
+        Use <strong>Download scored checklist (PDF)</strong> for a printable copy with ticks and competency percentages.
+      {% endif %}
+    </div>
+  {% else %}
+    <div class="alert alert-info">
+      <strong>Submit each competency separately.</strong>
+      Complete the ticks for one competency, then click <strong>Submit</strong> on that competency only.
+      Other competencies stay as <strong>—</strong> on the class scores page until you submit them.
+    </div>
+  {% endif %}
+
+  {% if class_project_theme %}
+    <div class="card mb-3 border-info">
+      <div class="card-body py-3">
+        <div class="small text-muted text-uppercase mb-1">UNEB theme · {{ class_project_theme.coverage_label }}</div>
+        <p class="mb-0 fw-semibold">{{ class_project_theme.theme|linebreaksbr }}</p>
+      </div>
+    </div>
+  {% endif %}
+
+  {% if checklist_document %}
+    <div class="card mb-3 border-primary">
+      <div class="card-body p-3 small">
+        <p class="text-center fw-bold mb-1">{{ checklist_document.board }}</p>
+        <p class="text-center fw-semibold mb-3">{{ checklist_document.title }}</p>
+        <p class="fw-semibold mb-1">{{ checklist_document.instructions_title }}</p>
+        <ol class="mb-3 ps-3">
+          {% for line in checklist_document.instructions %}
+            <li class="mb-1">{{ line }}</li>
+          {% endfor %}
+        </ol>
+        <div class="table-responsive">
+          <table class="table table-sm table-bordered mb-0 align-middle">
+            <thead class="table-light">
+              <tr>
+                <th>SN</th>
+                <th>Competency</th>
+                <th>Period of Assessment</th>
+                <th>Submission Time Line</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in checklist_document.assessment_period_rows %}
+                <tr>
+                  <td>{{ row.sn }}</td>
+                  <td>{{ row.competency }}</td>
+                  <td>{{ row.period }}</td>
+                  <td>{{ row.submission }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+
+  {% if not read_only_observation and allow_project_title_edit %}
+    <div class="card mb-3">
+      <div class="card-body p-4">
+        <h2 class="h6">Project title</h2>
+        <input
+          id="project-title-main"
+          class="form-control"
+          type="text"
+          maxlength="300"
+          value="{{ student.project_title }}"
+        />
+        <p class="text-muted small mb-0 mt-2">Saved when you submit any competency below.</p>
+      </div>
+    </div>
+  {% elif student.project_title or read_only_observation %}
+    <div class="card mb-3">
+      <div class="card-body py-3">
+        <h2 class="h6">Project title</h2>
+        {% if student.project_title %}
+          <p class="mb-0 fw-semibold">{{ student.project_title }}</p>
+        {% else %}
+          <p class="mb-0 text-muted">Not set yet by the project supervisor.</p>
+        {% endif %}
+      </div>
+    </div>
+  {% endif %}
+
+  <div class="mb-3 px-1">
+    <h2 class="h6">Assessment period</h2>
+    <p class="mb-0 text-muted">Scheme: {{ scheme.name }} · Year {{ year }} · Term {{ term }}</p>
+  </div>
+
+  {% if checkbox_mode and not read_only_observation %}
+    <p class="text-muted small px-1">
+      Tick observations met, then <strong>Submit</strong> that competency. Competency % = (met ÷ total) × 100.
+    </p>
+  {% endif %}
+
+  {% for entry in observation_structure %}
+    <div class="card mb-4 border-primary border-opacity-25">
+      <div class="card-body p-4">
+        <form method="post" class="vstack gap-3 competency-score-form">
+          {% csrf_token %}
+          {% if not read_only_observation %}
+            <input type="hidden" name="scoring_mode" value="observation" />
+            <input type="hidden" name="scheme" value="{{ scheme.id }}" />
+            <input type="hidden" name="year" value="{{ year }}" />
+            <input type="hidden" name="term" value="{{ term }}" />
+            <input type="hidden" name="submit_competency" value="{{ entry.competency.id }}" />
+            {% if allow_project_title_edit %}
+              <input type="hidden" name="project_title" value="{{ student.project_title }}" class="sync-project-title" />
+            {% endif %}
+          {% endif %}
+
+          <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+            <h3 class="h5 fw-bold text-primary mb-0">
+              {% with heading=checklist_competency_headings|get_item:entry.competency.name %}
+                {% if heading %}{{ heading }}{% else %}{{ entry.competency.name }}{% endif %}
+              {% endwith %}
+            </h3>
+            <div class="d-flex gap-2 flex-wrap">
+              {% if entry.competency.id in submitted_competency_ids %}
+                <span class="badge text-bg-success">Submitted</span>
+              {% endif %}
+              {% with pct=computed_percentages|get_item:entry.competency.id %}
+                {% if pct != "" %}
+                  <span class="badge text-bg-primary fs-6">Score: {{ pct }}%</span>
+                {% elif not read_only_observation %}
+                  <span class="badge text-bg-secondary">Not submitted yet</span>
+                {% endif %}
+              {% endwith %}
+            </div>
+          </div>
+
+          {% for section in entry.sections %}
+            <div class="card mb-2 border">
+              <div class="card-header bg-light py-2">
+                <div class="fw-semibold">
+                  {% if section.code %}{{ section.code }} {% endif %}{{ section.title }}
+                </div>
+                {% if section.preamble %}
+                  <div class="small text-muted mt-1 fst-italic">{{ section.preamble }}</div>
+                {% endif %}
+              </div>
+              <ul class="list-group list-group-flush">
+                {% for item in section.items %}
+                  <li class="list-group-item{% if item.max_rating == 0 %} bg-light{% endif %}">
+                    {% if item.max_rating == 0 %}
+                      <div class="fw-semibold small text-secondary">{{ item.description }}</div>
+                    {% elif checkbox_mode %}
+                      <div class="form-check">
+                        <input
+                          class="form-check-input"
+                          type="checkbox"
+                          name="obs_{{ item.id }}"
+                          value="1"
+                          id="obs-{{ entry.competency.id }}-{{ item.id }}"
+                          {% if observation_ratings|get_item:item.id == 1 %}checked{% endif %}
+                          {% if read_only_observation %}disabled{% endif %}
+                        />
+                        <label class="form-check-label" for="obs-{{ entry.competency.id }}-{{ item.id }}">{{ item.description }}</label>
+                      </div>
+                    {% else %}
+                      <div class="small fw-semibold mb-1">{{ item.description }}</div>
+                      <div class="d-flex flex-wrap gap-2">
+                        {% for val, label in rating_labels %}
+                          <label class="form-check form-check-inline">
+                            <input
+                              class="form-check-input"
+                              type="radio"
+                              name="obs_{{ item.id }}"
+                              value="{{ val }}"
+                              {% if observation_ratings|get_item:item.id == val %}checked{% endif %}
+                              {% if read_only_observation %}disabled{% endif %}
+                            />
+                            {{ val }}
+                          </label>
+                        {% endfor %}
+                      </div>
+                    {% endif %}
+                  </li>
+                {% endfor %}
+              </ul>
+            </div>
+          {% endfor %}
+
+          {% if not read_only_observation %}
+            <div class="d-flex gap-2 flex-wrap pt-2 border-top">
+              <button class="btn btn-primary" type="submit">
+                Submit {{ entry.competency.name }}
+              </button>
+            </div>
+          {% endif %}
+        </form>
+      </div>
+    </div>
+  {% endfor %}
+
+  <div class="d-flex gap-2 flex-wrap">
+    <a class="btn btn-outline-secondary" href="{{ back_url }}">{% if read_only_observation %}Back{% else %}Done / back to list{% endif %}</a>
+  </div>
+
+  {% if allow_project_title_edit and not read_only_observation %}
+    <script>
+      (function () {
+        const main = document.getElementById("project-title-main");
+        if (!main) return;
+        function syncTitle() {
+          document.querySelectorAll(".sync-project-title").forEach(function (el) {
+            el.value = main.value;
+          });
+        }
+        main.addEventListener("input", syncTitle);
+        document.querySelectorAll(".competency-score-form").forEach(function (form) {
+          form.addEventListener("submit", syncTitle);
+        });
+        syncTitle();
+      })();
+    </script>
+  {% endif %}
+{% endblock %}

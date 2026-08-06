@@ -1,0 +1,240 @@
+{% extends "base.html" %}
+
+{% block title %}End-of-year promotion · ProjectTrack UG{% endblock %}
+
+{% block head %}
+  <style>
+    .promo-hero-card {
+      border-left: 4px solid var(--pt-primary);
+    }
+    .promo-move-row td {
+      vertical-align: middle;
+    }
+    .promo-arrow {
+      color: var(--pt-primary);
+      font-weight: 700;
+    }
+    .track-label {
+      font-size: 0.7rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: #6c757d;
+    }
+  </style>
+{% endblock %}
+
+{% block hero %}
+  <div class="d-flex flex-wrap gap-3 align-items-center justify-content-between">
+    <div>
+      <h1 class="h4 mb-1">End-of-year class promotion</h1>
+      <div class="text-muted">
+        O-level (S.1–S.4) and A-level (S.5–S.6) are handled separately. Supervisors, scores, and cohort themes stay with each learner.
+      </div>
+    </div>
+    <a class="btn btn-outline-light border" href="{% url 'overall_dashboard' %}">Back to dashboard</a>
+  </div>
+{% endblock %}
+
+{% block content %}
+  <div class="row g-4">
+    <div class="col-12 col-lg-7">
+      <div class="card promo-hero-card mb-0">
+        <div class="card-body p-4">
+          <h2 class="h6 fw-semibold mb-3">O-level and A-level</h2>
+          <ul class="small text-muted mb-4">
+            <li class="mb-2">
+              <strong>O-level (S.1 → S.4)</strong> — S.1, S.2, and S.3 move up one class.
+              <strong>S.4 leavers graduate</strong> (they do not become S.5).
+            </li>
+            <li class="mb-2">
+              <strong>A-level (S.5 → S.6)</strong> — S.5 is a <em>new intake</em> each year
+              (<a href="{% url 'upload_students' %}">upload students</a> with new supervisors).
+              Only existing S.5 learners move to S.6; S.6 leavers graduate.
+            </li>
+            <li class="mb-2"><strong>Supervisor</strong> — unchanged for promoted learners (O-level S.1–S.3 and A-level S.5).</li>
+            <li class="mb-2"><strong>Scores &amp; observations</strong> — all past assessments remain on each learner’s record.</li>
+            <li class="mb-0">
+              <strong>UNEB cohort theme</strong> — S.3/S.4 learners keep the same cohort
+              (e.g. S.3 cohort 2025 → S.4 in 2026 still uses cohort 2025).
+            </li>
+          </ul>
+
+          <form method="post" class="vstack gap-3">
+            {% csrf_token %}
+            <div>
+              <label class="form-label" for="id_from_academic_year">{{ form.from_academic_year.label }}</label>
+              {{ form.from_academic_year }}
+              {% if form.from_academic_year.errors %}
+                <div class="text-danger small">{{ form.from_academic_year.errors }}</div>
+              {% endif %}
+              <div class="form-text">{{ form.from_academic_year.help_text }}</div>
+            </div>
+
+            <div class="form-check">
+              {{ form.confirm }}
+              <label class="form-check-label" for="id_confirm">{{ form.confirm.label }}</label>
+              {% if form.confirm.errors %}
+                <div class="text-danger small">{{ form.confirm.errors }}</div>
+              {% endif %}
+            </div>
+
+            {% if preview.already_run %}
+              <div class="alert alert-warning mb-0">
+                Promotion for <strong>{{ preview.from_academic_year }}</strong> was already run
+                {% if preview.last_run_at %}on {{ preview.last_run_at|date:"j M Y, H:i" }}{% endif %}.
+                Choose a different year or contact support if you need to undo this.
+              </div>
+              <button class="btn btn-secondary" type="submit" disabled>Already promoted</button>
+            {% elif preview.has_work %}
+              <button class="btn btn-primary px-4" type="submit">
+                Run promotion
+                ({{ preview.total_promoted }} move{{ preview.total_promoted|pluralize }},
+                {{ preview.graduate_count }} graduate{{ preview.graduate_count|pluralize }})
+              </button>
+            {% else %}
+              <div class="alert alert-info mb-0">No active learners to promote for this year.</div>
+              <button class="btn btn-secondary" type="submit" disabled>Nothing to promote</button>
+            {% endif %}
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-lg-5">
+      <div class="card h-100">
+        <div class="card-header bg-white py-3">
+          <div class="fw-semibold">Preview — {{ preview.from_academic_year }} → {{ preview.to_academic_year }}</div>
+          <div class="small text-muted">Active learners only</div>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-sm mb-0 promo-move-row">
+              <thead class="table-light">
+                <tr>
+                  <th class="ps-3">From</th>
+                  <th></th>
+                  <th>To</th>
+                  <th class="text-end pe-3">Learners</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="table-light">
+                  <td colspan="4" class="ps-3 py-2 track-label">O-level promotions</td>
+                </tr>
+                {% for move in preview.moves %}
+                  {% if move.track == "O-level" %}
+                    <tr>
+                      <td class="ps-3"><span class="badge text-bg-primary">{{ move.from_class }}</span></td>
+                      <td class="promo-arrow">→</td>
+                      <td><span class="badge text-bg-success">{{ move.to_class }}</span></td>
+                      <td class="text-end pe-3 fw-semibold">{{ move.count }}</td>
+                    </tr>
+                  {% endif %}
+                {% endfor %}
+                {% for grad in preview.graduates %}
+                  {% if grad.from_class == "S4" %}
+                    <tr>
+                      <td class="ps-3"><span class="badge text-bg-secondary">{{ grad.from_class }}</span></td>
+                      <td class="promo-arrow">→</td>
+                      <td><span class="text-muted small">{{ grad.label }}</span></td>
+                      <td class="text-end pe-3 fw-semibold">{{ grad.count }}</td>
+                    </tr>
+                  {% endif %}
+                {% endfor %}
+                <tr class="table-light">
+                  <td colspan="4" class="ps-3 py-2 track-label">A-level (S.5 uploaded separately)</td>
+                </tr>
+                {% for move in preview.moves %}
+                  {% if move.track == "A-level" %}
+                    <tr>
+                      <td class="ps-3"><span class="badge text-bg-primary">{{ move.from_class }}</span></td>
+                      <td class="promo-arrow">→</td>
+                      <td><span class="badge text-bg-success">{{ move.to_class }}</span></td>
+                      <td class="text-end pe-3 fw-semibold">{{ move.count }}</td>
+                    </tr>
+                  {% endif %}
+                {% endfor %}
+                {% for grad in preview.graduates %}
+                  {% if grad.from_class == "S6" %}
+                    <tr>
+                      <td class="ps-3"><span class="badge text-bg-secondary">{{ grad.from_class }}</span></td>
+                      <td class="promo-arrow">→</td>
+                      <td><span class="text-muted small">{{ grad.label }}</span></td>
+                      <td class="text-end pe-3 fw-semibold">{{ grad.count }}</td>
+                    </tr>
+                  {% endif %}
+                {% endfor %}
+              </tbody>
+              <tfoot class="table-light">
+                <tr>
+                  <td colspan="3" class="ps-3 fw-semibold">Total promoted</td>
+                  <td class="text-end pe-3 fw-semibold">{{ preview.total_promoted }}</td>
+                </tr>
+                <tr>
+                  <td colspan="3" class="ps-3 fw-semibold">Total graduated</td>
+                  <td class="text-end pe-3 fw-semibold">{{ preview.graduate_count }}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {% if promotion_history %}
+    <div class="card mt-4">
+      <div class="card-header bg-white py-3">
+        <div class="fw-semibold">Promotion history</div>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm table-hover mb-0 align-middle">
+            <thead class="table-light">
+              <tr>
+                <th class="ps-3">Year</th>
+                <th>Promoted</th>
+                <th>Graduated</th>
+                <th>Run by</th>
+                <th class="pe-3">Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for run in promotion_history %}
+                <tr>
+                  <td class="ps-3">{{ run.from_academic_year }} → {{ run.to_academic_year }}</td>
+                  <td>{{ run.promoted_count }}</td>
+                  <td class="small">
+                    {{ run.graduated_count }}
+                    {% if run.summary.S4_O_level_graduated or run.summary.S6_A_level_graduated %}
+                      <span class="text-muted d-block">
+                        {% if run.summary.S4_O_level_graduated %}S.4: {{ run.summary.S4_O_level_graduated }}{% endif %}
+                        {% if run.summary.S4_O_level_graduated and run.summary.S6_A_level_graduated %} · {% endif %}
+                        {% if run.summary.S6_A_level_graduated %}S.6: {{ run.summary.S6_A_level_graduated }}{% endif %}
+                      </span>
+                    {% endif %}
+                  </td>
+                  <td>{{ run.run_by.username }}</td>
+                  <td class="pe-3 text-muted small">{{ run.created_at|date:"j M Y, H:i" }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+
+  <script>
+    (function () {
+      const yearInput = document.getElementById("id_from_academic_year");
+      if (!yearInput) return;
+      yearInput.addEventListener("change", function () {
+        const value = (yearInput.value || "").trim();
+        if (value) {
+          window.location.search = "from_year=" + encodeURIComponent(value);
+        }
+      });
+    })();
+  </script>
+{% endblock %}

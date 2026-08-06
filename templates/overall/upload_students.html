@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+
+{% block title %}Upload students · ProjectTrack UG{% endblock %}
+
+{% block hero %}
+  <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between">
+    <div>
+      <h1 class="h4 mb-1">Upload students</h1>
+      <div class="text-muted">Bulk add students and attach them to supervisors</div>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <a class="btn btn-primary" href="{% url 'overall_add_student' %}">Add manually</a>
+      <a class="btn btn-outline-light border" href="{% url 'overall_dashboard' %}">Back</a>
+    </div>
+  </div>
+{% endblock %}
+
+{% block content %}
+  <div class="row g-3">
+    <div class="col-12 col-lg-7">
+      <div class="card">
+        <div class="card-body p-4">
+          <div class="alert alert-warning">
+            <strong>Before uploading students:</strong> upload supervisors first. Each student must have a
+            <code>supervisor_username</code> that matches an existing supervisor login.
+          </div>
+          <div class="alert alert-info small mb-0">
+            <strong>O-level vs A-level:</strong> S.1–S.4 follow the O-level cycle (end-of-year promotion moves them up; S.4 leavers graduate).
+            <strong>S.5 is a new A-level intake</strong> each year — upload a fresh list with new supervisors (not promoted from S.4).
+            S.5 → S.6 is handled at end-of-year promotion.
+          </div>
+
+          <div class="mt-3">
+          {% if supervisor_usernames %}
+            <p class="small text-muted mb-3">
+              Available supervisor usernames:
+              <strong>{{ supervisor_usernames|join:", " }}</strong>
+            </p>
+          {% else %}
+            <p class="small text-danger mb-3">No supervisors yet — upload supervisors first.</p>
+          {% endif %}
+          </div>
+
+          <p class="text-muted">
+            Upload <strong>CSV</strong> or <strong>Excel (.xlsx)</strong>. Row 1 must be column headers. Data starts row 2.
+          </p>
+
+          <div class="table-responsive mb-3">
+            <table class="table table-sm table-bordered">
+              <thead class="table-light">
+                <tr>
+                  <th>full_name</th>
+                  <th>class_level</th>
+                  <th>supervisor_username</th>
+                  <th>student_no</th>
+                  <th>stream</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Amina Nakiito</td>
+                  <td>S2</td>
+                  <td>jane</td>
+                  <td>S123</td>
+                  <td>Blue</td>
+                </tr>
+                <tr>
+                  <td>Kato Peter</td>
+                  <td>S2</td>
+                  <td>johnsup</td>
+                  <td>S124</td>
+                  <td>Red</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="small text-muted">
+            Accepted header names include: <code>Name</code>, <code>Full Name</code>, <code>Class</code>,
+            <code>Supervisor</code>, etc.
+          </p>
+
+          <form method="post" enctype="multipart/form-data" class="vstack gap-3">
+            {% csrf_token %}
+            <div>
+              <label class="form-label">File (CSV or Excel)</label>
+              <input class="form-control" type="file" name="file" accept=".csv,.xlsx" required />
+            </div>
+            <button class="btn btn-success" type="submit">Upload students</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}

@@ -1,0 +1,504 @@
+{% extends "base.html" %}
+{% load core_extras %}
+
+{% block title %}Observation checklists · ProjectTrack UG{% endblock %}
+
+{% block head %}
+  <style>
+    .obs-step {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+    }
+    .obs-step-num {
+      flex-shrink: 0;
+      width: 1.75rem;
+      height: 1.75rem;
+      border-radius: 50%;
+      background: var(--pt-primary);
+      color: #fff;
+      font-size: 0.8rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .obs-section {
+      border: 1px solid rgba(0, 0, 0, 0.08);
+      border-radius: 12px;
+      padding: 1.25rem;
+      background: #fff;
+    }
+    .obs-section + .obs-section {
+      margin-top: 1rem;
+    }
+    .obs-section-title {
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: #6c757d;
+      margin-bottom: 1rem;
+    }
+    .format-tile {
+      border: 2px solid rgba(0, 0, 0, 0.08);
+      border-radius: 12px;
+      padding: 1rem;
+      cursor: pointer;
+      transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+      background: #fff;
+    }
+    .format-tile:hover {
+      border-color: color-mix(in srgb, var(--pt-primary) 40%, transparent);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+    }
+    .format-tile.selected {
+      border-color: var(--pt-primary);
+      background: color-mix(in srgb, var(--pt-primary) 6%, #fff);
+      box-shadow: 0 4px 16px color-mix(in srgb, var(--pt-primary) 12%, transparent);
+    }
+    .format-tile.custom-tile.selected {
+      border-color: #6c757d;
+      background: #f8f9fa;
+    }
+    .cohort-guide-table th,
+    .cohort-guide-table td {
+      font-size: 0.875rem;
+      vertical-align: middle;
+    }
+    .checklist-table th {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: #6c757d;
+      font-weight: 600;
+      border-bottom-width: 1px;
+    }
+    .checklist-empty {
+      padding: 3rem 1.5rem;
+      text-align: center;
+      color: #6c757d;
+    }
+    .obs-sidebar {
+      position: sticky;
+      top: 1rem;
+    }
+    @media (max-width: 991.98px) {
+      .obs-sidebar {
+        position: static;
+      }
+    }
+  </style>
+{% endblock %}
+
+{% block hero %}
+  <div class="d-flex flex-wrap gap-3 align-items-center justify-content-between">
+    <div>
+      <h1 class="h4 mb-1">Observation checklists</h1>
+      <div class="text-muted">
+        Upload UNEB observation checklists per cohort and class. Supervisors use these when assessing learners.
+      </div>
+    </div>
+    <a class="btn btn-outline-light border" href="{% url 'overall_dashboard' %}">Back to dashboard</a>
+  </div>
+{% endblock %}
+
+{% block content %}
+  <div class="row g-4">
+    <!-- Sidebar: formats & quick reference -->
+    <div class="col-12 col-lg-4 order-lg-2">
+      <div class="obs-sidebar vstack gap-3">
+        <div class="card">
+          <div class="card-header bg-white py-3">
+            <div class="fw-semibold">Checklist formats</div>
+            <div class="small text-muted">Click a format to pre-fill the upload form</div>
+          </div>
+          <div class="card-body vstack gap-2">
+            {% for b in builtin_checklists %}
+              <div
+                class="format-tile"
+                role="button"
+                tabindex="0"
+                data-format="{{ b.format_year }}"
+                aria-label="Use {{ b.format_year }} format"
+              >
+                <div class="d-flex justify-content-between align-items-start gap-2 mb-1">
+                  <span class="badge text-bg-primary">{{ b.format_year }} format</span>
+                  {% if b.pdf_filename %}
+                    <span class="badge bg-success-subtle text-success border border-success">PDF included</span>
+                  {% endif %}
+                </div>
+                <div class="fw-semibold small">{{ b.label }}</div>
+                <div class="text-muted small mt-1">{{ b.default_title }}</div>
+                <div class="d-flex gap-2 mt-2">
+                  <a
+                    class="btn btn-sm btn-outline-success"
+                    href="{% url 'download_observation_structure_template' %}?format={{ b.format_year }}"
+                    onclick="event.stopPropagation()"
+                  >Download Excel</a>
+                  <button type="button" class="btn btn-sm btn-primary builtin-pick-btn" data-format="{{ b.format_year }}">
+                    Use this format
+                  </button>
+                </div>
+              </div>
+            {% empty %}
+              <p class="text-muted small mb-0">No built-in formats configured.</p>
+            {% endfor %}
+            <div
+              class="format-tile custom-tile"
+              role="button"
+              tabindex="0"
+              data-format=""
+              aria-label="Use custom upload"
+            >
+              <div class="badge text-bg-secondary mb-1">Custom</div>
+              <div class="fw-semibold small">Your own PDF &amp; Excel</div>
+              <div class="text-muted small mt-1">When UNEB issues a layout not yet in the app.</div>
+              <button type="button" class="btn btn-sm btn-outline-secondary mt-2 builtin-pick-btn" data-format="">
+                Use custom upload
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header bg-white py-3 d-flex align-items-center justify-content-between">
+            <span class="fw-semibold">Cohort quick reference</span>
+            <button
+              class="btn btn-sm btn-link text-decoration-none p-0"
+              type="button"
+              data-bs-toggle="collapse"
+              data-bs-target="#cohortGuideCollapse"
+              aria-expanded="false"
+            >
+              Show details
+            </button>
+          </div>
+          <div class="card-body py-3">
+            <p class="small text-muted mb-2">
+              In <strong>{{ calendar_year }}</strong>, use the cohort year below when uploading:
+            </p>
+            <ul class="list-unstyled mb-0 small">
+              {% for row in cohort_upload_guide %}
+                <li class="d-flex justify-content-between py-1 border-bottom border-light">
+                  <span><span class="badge text-bg-primary">{{ row.class_level }}</span> learners</span>
+                  <strong>Cohort {{ row.cohort_year }}</strong>
+                </li>
+              {% endfor %}
+            </ul>
+            <div class="collapse mt-3" id="cohortGuideCollapse">
+              <div class="table-responsive">
+                <table class="table table-sm cohort-guide-table mb-2">
+                  <thead class="table-light">
+                    <tr>
+                      <th>Class in {{ calendar_year }}</th>
+                      <th>Cohort year</th>
+                      <th>Format tip</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for row in cohort_upload_guide %}
+                      <tr>
+                        <td>{{ row.class_level }}</td>
+                        <td><strong>{{ row.cohort_year }}</strong></td>
+                        <td class="text-muted">
+                          {% if row.cohort_year >= 2027 %}
+                            Often use <strong>2026 format</strong> if UNEB unchanged
+                          {% else %}
+                            Match UNEB issue year (2025 or 2026)
+                          {% endif %}
+                        </td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+              <p class="small text-muted mb-0">
+                <strong>Cohort year</strong> = who the checklist is for.
+                <strong>Format</strong> = which UNEB layout — they can differ (e.g. cohort 2027 + 2026 format).
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main: upload form -->
+    <div class="col-12 col-lg-8 order-lg-1">
+      <div class="card">
+        <div class="card-header bg-white py-3 border-bottom">
+          <div class="d-flex align-items-center gap-2">
+            <span class="obs-step-num">1</span>
+            <div>
+              <div class="fw-semibold">Upload checklist</div>
+              <div class="small text-muted">Complete each section, then submit</div>
+            </div>
+          </div>
+        </div>
+        <div class="card-body p-4">
+          <form method="post" enctype="multipart/form-data" class="vstack gap-0" id="checklist-upload-form">
+            {% csrf_token %}
+
+            <div class="obs-section">
+              <div class="obs-section-title">Learners</div>
+              <div class="row g-3">
+                <div class="col-sm-6">
+                  <label class="form-label">{{ form.class_level.label }}</label>
+                  {{ form.class_level }}
+                  <div class="form-text">{{ form.class_level.help_text }}</div>
+                </div>
+                <div class="col-sm-6">
+                  <label class="form-label">{{ form.cohort_year.label }}</label>
+                  {{ form.cohort_year }}
+                  <div class="form-text">{{ form.cohort_year.help_text }}</div>
+                </div>
+                <div class="col-sm-6">
+                  <label class="form-label">{{ form.year.label }}</label>
+                  {{ form.year }}
+                  <div class="form-text">Calendar year of upload (reference only).</div>
+                </div>
+                <div class="col-sm-6">
+                  <label class="form-label">{{ form.term.label }}</label>
+                  {{ form.term }}
+                </div>
+              </div>
+            </div>
+
+            <div class="obs-section">
+              <div class="obs-section-title">Checklist format</div>
+              <label class="form-label fw-semibold" for="id_builtin_checklist">{{ form.builtin_checklist.label }}</label>
+              {{ form.builtin_checklist }}
+              <div class="form-text mb-2">{{ form.builtin_checklist.help_text }}</div>
+              <div id="builtin-preview" class="alert alert-secondary small mb-0 d-none"></div>
+            </div>
+
+            <div class="obs-section">
+              <div class="obs-section-title">Title &amp; files</div>
+              <div class="mb-3">
+                <label class="form-label">{{ form.title.label }}</label>
+                {{ form.title }}
+              </div>
+              <div class="mb-3">
+                <label class="form-label fw-semibold">Official checklist PDF</label>
+                {{ form.pdf_file }}
+                {% if form.pdf_file.help_text %}<div class="form-text" id="pdf-help">{{ form.pdf_file.help_text }}</div>{% endif %}
+              </div>
+              <div class="rounded p-3 bg-light border" id="custom-upload-panel">
+                <label class="form-label fw-semibold mb-1">{{ form.structure_file.label }}</label>
+                <input class="form-control" type="file" name="structure_file" accept=".xlsx,.csv" />
+                <div class="form-text mt-2 mb-0">
+                  {{ form.structure_file.help_text }}
+                  Optional for built-in formats — download Excel from the sidebar, edit, then attach to override tick-boxes.
+                </div>
+              </div>
+            </div>
+
+            <div class="pt-3 mt-1">
+              <button class="btn btn-primary px-4" type="submit">Upload checklist</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Uploaded checklists -->
+  <div class="card mt-4">
+    <div class="card-header bg-white py-3 d-flex flex-wrap align-items-center justify-content-between gap-2">
+      <div>
+        <div class="fw-semibold">Uploaded checklists</div>
+        <div class="small text-muted">Active checklists for your school</div>
+      </div>
+      {% if checklists %}
+        <span class="badge text-bg-light border">{{ checklists|length }} checklist{{ checklists|length|pluralize }}</span>
+      {% endif %}
+    </div>
+    <div class="card-body p-0">
+      {% if checklists %}
+        <div class="table-responsive">
+          <table class="table table-hover mb-0 align-middle checklist-table">
+            <thead>
+              <tr>
+                <th class="ps-4">Title</th>
+                <th>Cohort</th>
+                <th>Format</th>
+                <th>Class</th>
+                <th>Year / Term</th>
+                <th class="text-end pe-4">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for cl in checklists %}
+                <tr>
+                  <td class="ps-4">
+                    <div class="fw-semibold">{{ cl.title }}</div>
+                    {% if cl.criteria_count %}
+                      <div class="small text-muted">{{ cl.criteria_count }} observation line{{ cl.criteria_count|pluralize }}</div>
+                    {% endif %}
+                  </td>
+                  <td>
+                    {% if cl.cohort_year %}
+                      <span class="badge text-bg-info">{{ cl.cohort_year }}</span>
+                    {% else %}
+                      <span class="text-muted">—</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    {% if cl.format_year and builtin_labels|get_item:cl.format_year %}
+                      <span class="badge bg-secondary-subtle text-secondary border">{{ cl.format_year }}</span>
+                      <span class="small d-block text-muted mt-1">{{ builtin_labels|get_item:cl.format_year }}</span>
+                    {% elif cl.format_year %}
+                      <span class="badge bg-secondary-subtle text-secondary border">{{ cl.format_year }}</span>
+                    {% else %}
+                      <span class="badge text-bg-light border text-muted">Custom</span>
+                    {% endif %}
+                  </td>
+                  <td><span class="badge text-bg-primary">{{ cl.class_level }}</span></td>
+                  <td class="small text-muted">
+                    {{ cl.year }}{% if cl.term %} · Term {{ cl.term }}{% endif %}
+                  </td>
+                  <td class="text-end pe-4 text-nowrap">
+                    <a class="btn btn-sm btn-outline-primary" href="{% url 'download_observation_checklist' cl.id %}">PDF</a>
+                    <form
+                      method="post"
+                      action="{% url 'delete_observation_checklist' cl.id %}"
+                      class="d-inline"
+                      onsubmit="return confirm('Delete this checklist? Supervisors will no longer see it.');"
+                    >
+                      {% csrf_token %}
+                      <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                    </form>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="checklist-empty">
+          <div class="fw-semibold mb-1">No checklists yet</div>
+          <p class="small mb-0">Upload your first checklist using the form above.</p>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const meta = {{ builtin_meta_json|safe }};
+      const builtinSelect = document.getElementById("id_builtin_checklist");
+      const cohortInput = document.getElementById("id_cohort_year");
+      const titleInput = document.getElementById("id_title");
+      const preview = document.getElementById("builtin-preview");
+      const customPanel = document.getElementById("custom-upload-panel");
+      const pdfHelp = document.getElementById("pdf-help");
+      const classSelect = document.getElementById("id_class_level");
+      const formatTiles = document.querySelectorAll(".format-tile");
+
+      function calendarYear() {
+        return new Date().getFullYear();
+      }
+
+      function suggestCohortFromClass() {
+        const y = calendarYear();
+        const cl = (classSelect && classSelect.value) || "";
+        if (cl === "S3") return String(y);
+        if (cl === "S4") return String(y - 1);
+        return cohortInput.value || "";
+      }
+
+      function suggestedTitle(formatKey, cohortYear) {
+        const info = meta[formatKey];
+        if (!info) return "";
+        if (cohortYear && formatKey && cohortYear !== formatKey) {
+          return info.title + " (cohort " + cohortYear + ")";
+        }
+        return info.title;
+      }
+
+      function syncFormatTiles(selectedKey) {
+        formatTiles.forEach(function (tile) {
+          const fmt = tile.getAttribute("data-format");
+          const isCustom = fmt === "";
+          const isSelected = isCustom ? !selectedKey : selectedKey === fmt;
+          tile.classList.toggle("selected", isSelected);
+        });
+      }
+
+      function updateUi() {
+        const key = builtinSelect.value;
+        const info = meta[key];
+        const cy = cohortInput.value;
+        syncFormatTiles(key);
+
+        if (key && info) {
+          if (titleInput) titleInput.value = suggestedTitle(key, cy);
+          preview.classList.remove("d-none", "alert-warning");
+          preview.classList.add("alert-secondary");
+          let msg = "<strong>Format:</strong> " + info.label;
+          if (cy) msg += "<br><strong>Cohort:</strong> " + cy + " learners";
+          if (cy && key !== cy) {
+            msg += " <span class='text-muted'>(format " + key + " for cohort " + cy + ")</span>";
+          }
+          msg += info.has_pdf
+            ? "<br>PDF attached automatically if you leave the file empty."
+            : "<br>Upload a PDF for this format.";
+          preview.innerHTML = msg;
+          customPanel.classList.remove("border-primary");
+          customPanel.classList.add("opacity-75");
+          if (pdfHelp) {
+            pdfHelp.textContent = info.has_pdf
+              ? "Optional — bundled PDF for " + key + " format."
+              : "Upload the official PDF.";
+          }
+        } else {
+          preview.classList.remove("d-none", "alert-secondary");
+          preview.classList.add("alert-warning");
+          preview.innerHTML = cy
+            ? "<strong>Custom upload</strong> for cohort <strong>" + cy + "</strong> — upload PDF and Excel structure."
+            : "<strong>Custom upload</strong> — upload your own PDF and Excel/CSV structure file.";
+          customPanel.classList.remove("opacity-75");
+          customPanel.classList.add("border-primary");
+          if (pdfHelp) pdfHelp.textContent = "Required for custom uploads.";
+        }
+      }
+
+      function pickFormat(fmt) {
+        builtinSelect.value = fmt;
+        updateUi();
+        document.getElementById("checklist-upload-form").scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+
+      if (builtinSelect) builtinSelect.addEventListener("change", updateUi);
+      if (cohortInput) cohortInput.addEventListener("input", updateUi);
+      if (classSelect) {
+        classSelect.addEventListener("change", function () {
+          const suggested = suggestCohortFromClass();
+          if (suggested) cohortInput.value = suggested;
+          updateUi();
+        });
+      }
+
+      document.querySelectorAll(".builtin-pick-btn").forEach(function (btn) {
+        btn.addEventListener("click", function (e) {
+          e.stopPropagation();
+          pickFormat(btn.getAttribute("data-format"));
+        });
+      });
+
+      formatTiles.forEach(function (tile) {
+        tile.addEventListener("click", function () {
+          pickFormat(tile.getAttribute("data-format"));
+        });
+        tile.addEventListener("keydown", function (e) {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            pickFormat(tile.getAttribute("data-format"));
+          }
+        });
+      });
+
+      updateUi();
+    })();
+  </script>
+{% endblock %}

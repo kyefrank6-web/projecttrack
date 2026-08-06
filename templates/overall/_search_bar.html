@@ -1,0 +1,20 @@
+<div class="card mb-3 border-0 shadow-sm">
+  <div class="card-body py-3">
+    <form method="get" class="d-flex flex-wrap gap-2 align-items-center">
+      <label class="visually-hidden" for="overall-search-q">Search</label>
+      <input
+        id="overall-search-q"
+        class="form-control flex-grow-1"
+        type="search"
+        name="q"
+        value="{{ search_q }}"
+        placeholder="{{ placeholder|default:'Search supervisors or students…' }}"
+        autocomplete="off"
+      />
+      <button class="btn btn-primary" type="submit">Search</button>
+      {% if search_q %}
+        <a class="btn btn-outline-secondary" href="{{ search_action }}">Clear</a>
+      {% endif %}
+    </form>
+  </div>
+</div>

@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block title %}Account settings · ProjectTrack UG{% endblock %}
+
+{% block hero %}
+  <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between">
+    <div>
+      <h1 class="h4 mb-1">Account settings</h1>
+      <div class="text-muted">
+        {% if active_profile.school %}Working in: <strong>{{ active_profile.school.name }}</strong>{% endif %}
+      </div>
+    </div>
+    <a class="btn btn-outline-light border" href="{% url 'home' %}">Back</a>
+  </div>
+{% endblock %}
+
+{% block content %}
+  <div class="row g-3">
+    <div class="col-12 col-lg-6">
+      <div class="card">
+        <div class="card-body p-4">
+          <h2 class="h6 mb-3">Username</h2>
+          <form method="post" class="vstack gap-3">
+            {% csrf_token %}
+            <div>
+              <label class="form-label">Username</label>
+              {{ username_form.username }}
+              {% for e in username_form.username.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+            </div>
+            <button class="btn btn-primary" type="submit" name="update_username" value="1">Save username</button>
+          </form>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-lg-6">
+      <div class="card">
+        <div class="card-body p-4">
+          <h2 class="h6 mb-3">Password</h2>
+          <p class="text-muted small">
+            Password changes apply only to
+            {% if active_profile.school %}{{ active_profile.school.name }}{% else %}your account{% endif %}.
+            Other schools keep their own passwords.
+          </p>
+          <a class="btn btn-outline-primary" href="{% url 'password_change' %}">Change password</a>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}

@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+
+{% block title %}UNEB project themes · ProjectTrack UG{% endblock %}
+
+{% block hero %}
+  <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between">
+    <div>
+      <h1 class="h4 mb-1">UNEB project themes</h1>
+      <div class="text-muted">
+        UNEB publishes one theme when learners start S.3 Term 1. That same theme applies through S.4 Term 3 (around November).
+      </div>
+    </div>
+    <a class="btn btn-outline-light border" href="{% url 'overall_dashboard' %}">Back</a>
+  </div>
+{% endblock %}
+
+{% block content %}
+  <div class="row g-3">
+    <div class="col-12 col-lg-5">
+      <div class="card mb-3">
+        <div class="card-body p-4">
+          <h2 class="h6 mb-2">UNEB cohort theme (S.3 → S.4)</h2>
+          <p class="small text-muted mb-3">
+            Set the theme once per cohort — e.g. cohort year {{ year }} covers S.3 in {{ year }}
+            and the same learners in S.4 through Term 3 of {{ year|add:1 }} (around November).
+          </p>
+          <form method="post" class="vstack gap-3">
+            {% csrf_token %}
+            <input type="hidden" name="form_kind" value="cohort" />
+            <input type="hidden" name="year" value="{{ year }}" />
+            <div>
+              <label class="form-label">{{ cohort_form.cohort_year.label }}</label>
+              {{ cohort_form.cohort_year }}
+              {% if cohort_form.cohort_year.errors %}<div class="text-danger small">{{ cohort_form.cohort_year.errors }}</div>{% endif %}
+            </div>
+            <div>
+              <label class="form-label">{{ cohort_form.theme.label }}</label>
+              {{ cohort_form.theme }}
+              {% if cohort_form.theme.errors %}<div class="text-danger small">{{ cohort_form.theme.errors }}</div>{% endif %}
+            </div>
+            <button class="btn btn-primary" type="submit">Save UNEB theme</button>
+          </form>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-body p-4">
+          <h2 class="h6 mb-2">Other classes (optional)</h2>
+          <p class="small text-muted mb-3">S.1, S.2, S.5, or S.6 only — not used for the UNEB S.3/S.4 cycle.</p>
+          <form method="post" class="vstack gap-3">
+            {% csrf_token %}
+            <input type="hidden" name="form_kind" value="class" />
+            <input type="hidden" name="year" value="{{ year }}" />
+            <div>
+              <label class="form-label">{{ form.class_level.label }}</label>
+              {{ form.class_level }}
+              {% if form.class_level.errors %}<div class="text-danger small">{{ form.class_level.errors }}</div>{% endif %}
+            </div>
+            <div>
+              <label class="form-label">{{ form.year.label }}</label>
+              {{ form.year }}
+              {% if form.year.errors %}<div class="text-danger small">{{ form.year.errors }}</div>{% endif %}
+            </div>
+            <div>
+              <label class="form-label">{{ form.theme.label }}</label>
+              {{ form.theme }}
+              {% if form.theme.errors %}<div class="text-danger small">{{ form.theme.errors }}</div>{% endif %}
+            </div>
+            <button class="btn btn-outline-primary" type="submit">Save class theme</button>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 col-lg-7">
+      <div class="card mb-3">
+        <div class="card-body p-3 d-flex flex-wrap align-items-center gap-2">
+          <span class="text-muted small mb-0">Themes active in calendar year</span>
+          <form method="get" class="d-flex gap-2 align-items-center ms-auto">
+            <label class="small text-muted mb-0" for="filter-year">Year</label>
+            <input
+              id="filter-year"
+              class="form-control form-control-sm"
+              type="number"
+              name="year"
+              value="{{ year }}"
+              min="2000"
+              max="2100"
+              style="width: 6rem"
+            />
+            <button class="btn btn-sm btn-outline-primary" type="submit">View</button>
+          </form>
+        </div>
+      </div>
+
+      <div class="card mb-3">
+        <div class="card-header fw-semibold">UNEB cohort themes</div>
+        <div class="card-body p-0">
+          {% if cohort_themes %}
+            <div class="list-group list-group-flush">
+              {% for t in cohort_themes %}
+                <div class="list-group-item">
+                  <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-2">
+                    <div>
+                      <span class="badge text-bg-primary">Cohort {{ t.cohort_year }}</span>
+                      <span class="text-muted small ms-1">{{ t.coverage_label }}</span>
+                    </div>
+                    <form
+                      method="post"
+                      class="d-inline"
+                      onsubmit="return confirm('Remove the UNEB theme for cohort {{ t.cohort_year }}?');"
+                    >
+                      {% csrf_token %}
+                      <input type="hidden" name="action" value="delete_cohort" />
+                      <input type="hidden" name="theme_id" value="{{ t.id }}" />
+                      <input type="hidden" name="year" value="{{ year }}" />
+                      <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                    </form>
+                  </div>
+                  <p class="mb-1">{{ t.theme|linebreaksbr }}</p>
+                  <div class="small text-muted">
+                    Updated {{ t.updated_at|date:"j M Y, H:i" }}
+                    {% if t.updated_by %} · {{ t.updated_by.get_full_name|default:t.updated_by.username }}{% endif %}
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+          {% else %}
+            <p class="text-muted p-4 mb-0">
+              No UNEB cohort theme for {{ year }} yet. Add one when UNEB publishes the S.3 Term 1 theme.
+            </p>
+          {% endif %}
+        </div>
+      </div>
+
+      {% if class_themes %}
+        <div class="card">
+          <div class="card-header fw-semibold">Other class themes ({{ year }})</div>
+          <div class="card-body p-0">
+            <div class="list-group list-group-flush">
+              {% for t in class_themes %}
+                <div class="list-group-item">
+                  <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-2">
+                    <div>
+                      <span class="badge text-bg-secondary">{{ t.class_level }}</span>
+                      <span class="text-muted small ms-1">Year {{ t.year }}</span>
+                    </div>
+                    <form
+                      method="post"
+                      class="d-inline"
+                      onsubmit="return confirm('Remove the project theme for {{ t.class_level }} ({{ t.year }})?');"
+                    >
+                      {% csrf_token %}
+                      <input type="hidden" name="action" value="delete_class" />
+                      <input type="hidden" name="theme_id" value="{{ t.id }}" />
+                      <input type="hidden" name="year" value="{{ year }}" />
+                      <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                    </form>
+                  </div>
+                  <p class="mb-1">{{ t.theme|linebreaksbr }}</p>
+                  <div class="small text-muted">
+                    Updated {{ t.updated_at|date:"j M Y, H:i" }}
+                    {% if t.updated_by %} · {{ t.updated_by.get_full_name|default:t.updated_by.username }}{% endif %}
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}

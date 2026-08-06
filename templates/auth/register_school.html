@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block title %}Register school · ProjectTrack UG{% endblock %}
+
+{% block head %}
+  <style>
+    .register-wrap {
+      background: linear-gradient(135deg, #e8f1ff 0%, #f3e8ff 50%, #e8fff3 100%);
+      border-radius: 20px;
+      padding: 2rem;
+    }
+  </style>
+{% endblock %}
+
+{% block hero %}{% endblock %}
+
+{% block content %}
+  <div class="register-wrap">
+  <div class="text-center mb-4">
+    <span class="badge text-bg-primary mb-2">Get started</span>
+    <h1 class="h3 fw-bold">Register your school</h1>
+    <p class="text-muted">
+      Create the Overall Project Supervisor account for your school. A platform administrator must approve
+      your registration before you can use the system. If your school was deleted or rejected earlier,
+      you can register again with the same school name.
+    </p>
+  </div>
+  <div class="row justify-content-center">
+    <div class="col-12 col-lg-8">
+      <div class="card border-0 shadow">
+        <div class="card-body p-4">
+          <form method="post" class="row g-3">
+            {% csrf_token %}
+
+            <div class="col-12">
+              <label class="form-label">School name</label>
+              <input class="form-control" type="text" name="school_name" required value="{{ form.school_name.value|default:'' }}" />
+              {% for e in form.school_name.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+            </div>
+
+            <div class="col-md-6">
+              <label class="form-label">Overall supervisor username</label>
+              <input class="form-control" type="text" name="overall_username" required value="{{ form.overall_username.value|default:'' }}" />
+              {% for e in form.overall_username.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+            </div>
+
+            <div class="col-md-6">
+              <label class="form-label">Overall supervisor email (optional)</label>
+              <input class="form-control" type="email" name="overall_email" value="{{ form.overall_email.value|default:'' }}" />
+              {% for e in form.overall_email.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+            </div>
+
+            <div class="col-12">
+              <label class="form-label">Password</label>
+              <input class="form-control" type="password" name="overall_password" required />
+              {% for e in form.overall_password.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+              <div class="text-muted small mt-1">Use at least 8 characters. You can change it later.</div>
+            </div>
+
+            <div class="col-12 d-flex gap-2">
+              <button class="btn btn-success" type="submit">Create account</button>
+              <a class="btn btn-outline-secondary" href="{% url 'login' %}">Back to login</a>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+  </div>
+{% endblock %}
+

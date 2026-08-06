@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}Edit student · ProjectTrack UG{% endblock %}
+
+{% block hero %}
+  <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between">
+    <div>
+      <h1 class="h4 mb-1">Edit student information</h1>
+      <div class="text-muted">Update roster details or reassign supervisor. Project title is entered by the supervisor.</div>
+    </div>
+    <a class="btn btn-outline-light border" href="{{ back_url }}">Back</a>
+  </div>
+{% endblock %}
+
+{% block content %}
+  <div class="row justify-content-center">
+    <div class="col-12 col-lg-8">
+      <div class="card">
+        <div class="card-body p-4">
+          <form method="post" class="vstack gap-3">
+            {% csrf_token %}
+
+            <div>
+              <label class="form-label">{{ form.full_name.label }}</label>
+              {{ form.full_name }}
+              {% for e in form.full_name.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+            </div>
+
+            <div>
+              <label class="form-label">{{ form.student_no.label }}</label>
+              {{ form.student_no }}
+              {% for e in form.student_no.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+            </div>
+
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label">{{ form.class_level.label }}</label>
+                {{ form.class_level }}
+                {% for e in form.class_level.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">{{ form.stream.label }}</label>
+                {{ form.stream }}
+                {% for e in form.stream.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+              </div>
+            </div>
+
+            <div>
+              <label class="form-label">{{ form.supervisor.label }}</label>
+              {{ form.supervisor }}
+              <div class="form-text">Select the supervisor responsible for this student's project.</div>
+              {% for e in form.supervisor.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+            </div>
+
+            <div class="border rounded p-3 bg-light">
+              <div class="small text-muted text-uppercase mb-1">Project title (supervisor)</div>
+              {% if student.project_title %}
+                <p class="mb-0 fw-semibold">{{ student.project_title }}</p>
+              {% else %}
+                <p class="mb-0 text-muted">Not set yet — the assigned supervisor adds this when observing &amp; scoring.</p>
+              {% endif %}
+            </div>
+
+            <div class="d-flex gap-2 pt-2">
+              <button class="btn btn-primary" type="submit">Save changes</button>
+              <a class="btn btn-outline-secondary" href="{{ back_url }}">Cancel</a>
+              <a
+                class="btn btn-outline-primary ms-auto"
+                href="{% url 'overall_edit_student_scores' student.id %}?year={{ year }}&term={{ term }}&scheme_id={{ scheme_id }}"
+              >
+                Edit scores
+              </a>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}

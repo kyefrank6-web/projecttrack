@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block title %}Superadmin · ProjectTrack UG{% endblock %}
+
+{% block hero %}
+  <div>
+    <h1 class="h4 mb-1">Platform administration</h1>
+    <div class="text-muted">Review school registrations and manage schools</div>
+  </div>
+{% endblock %}
+
+{% block content %}
+  <ul class="nav nav-pills mb-3 gap-2">
+    <li class="nav-item">
+      <a
+        class="nav-link {% if status_filter == 'pending' %}active{% endif %}"
+        href="?status=pending"
+      >
+        Pending ({{ counts.pending }})
+      </a>
+    </li>
+    <li class="nav-item">
+      <a
+        class="nav-link {% if status_filter == 'approved' %}active{% endif %}"
+        href="?status=approved"
+      >
+        Approved ({{ counts.approved }})
+      </a>
+    </li>
+    <li class="nav-item">
+      <a
+        class="nav-link {% if status_filter == 'rejected' %}active{% endif %}"
+        href="?status=rejected"
+      >
+        Rejected ({{ counts.rejected }})
+      </a>
+    </li>
+  </ul>
+
+  <div class="card">
+    <div class="table-responsive">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>School</th>
+            <th>Overall supervisor</th>
+            <th>Status</th>
+            <th>Registered</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for school in schools %}
+            <tr>
+              <td class="fw-semibold">{{ school.name }}</td>
+              <td>
+                {% if school.overall_supervisor %}
+                  {{ school.overall_supervisor.username }}
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+              <td>
+                <span class="badge text-bg-{% if school.status == 'approved' %}success{% elif school.status == 'rejected' %}danger{% else %}warning{% endif %}">
+                  {{ school.get_status_display }}
+                </span>
+              </td>
+              <td class="small text-muted">{{ school.created_at|date:"M j, Y H:i" }}</td>
+              <td>
+                <a class="btn btn-sm btn-outline-primary" href="{% url 'superadmin_school_detail' school.id %}">Manage</a>
+              </td>
+            </tr>
+          {% empty %}
+            <tr>
+              <td colspan="5" class="text-muted p-4">No schools in this list.</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endblock %}

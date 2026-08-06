@@ -1,0 +1,345 @@
+{% extends "base.html" %}
+
+{% block title %}{% if nav_school %}{{ nav_school.name }}{% else %}Welcome{% endif %} · ProjectTrack UG{% endblock %}
+
+{% block head %}
+  <style>
+    .welcome-hero {
+      position: relative;
+      color: #fff;
+      border-radius: 20px;
+      overflow: hidden;
+      min-height: clamp(28rem, 68vh, 40rem);
+      display: flex;
+      align-items: flex-end;
+      isolation: isolate;
+      background: #0b1c3a;
+    }
+    .welcome-hero-media {
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      background-color: #1e293b;
+      background-size: cover;
+      background-position: center;
+    }
+    .welcome-hero-media img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center;
+      display: block;
+    }
+    .welcome-hero-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      background:
+        linear-gradient(
+          105deg,
+          rgba(8, 28, 58, 0.78) 0%,
+          rgba(8, 28, 58, 0.55) 38%,
+          rgba(8, 28, 58, 0.28) 68%,
+          rgba(8, 28, 58, 0.12) 100%
+        ),
+        linear-gradient(
+          to top,
+          rgba(8, 28, 58, 0.45) 0%,
+          transparent 42%
+        );
+    }
+    .welcome-hero .content {
+      position: relative;
+      z-index: 2;
+      width: 100%;
+      padding: clamp(1.75rem, 4vw, 3rem);
+    }
+    .welcome-hero .brand-mark {
+      font-size: clamp(2rem, 4.5vw, 3.25rem);
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1.05;
+      margin: 0 0 0.85rem;
+      text-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+    }
+    .welcome-hero .lead-copy {
+      max-width: 34rem;
+      font-size: 1.05rem;
+      line-height: 1.55;
+      opacity: 0.94;
+      margin-bottom: 1rem;
+    }
+    .welcome-hero .developer-line {
+      opacity: 0.88;
+      margin-bottom: 1.5rem;
+    }
+    .school-logo-hero {
+      width: 88px;
+      height: 88px;
+      object-fit: contain;
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: 16px;
+      padding: 8px;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
+    }
+    .feature-card {
+      border: none;
+      border-radius: 16px;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .feature-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.12);
+    }
+    .icon-badge {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: #fff;
+    }
+    .icon-badge-1 { background: linear-gradient(135deg, var(--pt-primary), var(--pt-secondary)); }
+    .icon-badge-2 { background: linear-gradient(135deg, var(--pt-accent), var(--pt-primary)); }
+    .icon-badge-3 { background: linear-gradient(135deg, var(--pt-secondary), var(--pt-accent)); }
+    .icon-badge-4 { background: linear-gradient(135deg, var(--pt-primary-dark), var(--pt-secondary)); }
+    .school-identity-card {
+      border: none;
+      border-radius: 16px;
+      border-top: 4px solid var(--pt-primary);
+      height: 100%;
+    }
+    .school-identity-card .card-title {
+      color: var(--pt-primary);
+    }
+    .competency-strip {
+      border: none;
+      border-radius: 16px;
+      background: linear-gradient(135deg, #f8fafc 0%, #eef6ff 100%);
+    }
+    .competency-strip li {
+      padding: 0.55rem 0;
+      border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+      color: #334155;
+      font-weight: 600;
+    }
+    .competency-strip li:last-child {
+      border-bottom: 0;
+    }
+    .developer-credit {
+      border: none;
+      border-radius: 16px;
+      background: linear-gradient(135deg, #f8fafc 0%, #eef2ff 100%);
+      border-left: 4px solid var(--pt-primary);
+    }
+    .developer-credit .developer-name {
+      letter-spacing: 0.04em;
+      color: var(--pt-primary-dark, #0a58ca);
+    }
+    @media (max-width: 767.98px) {
+      .welcome-hero {
+        min-height: 26rem;
+        align-items: flex-end;
+      }
+      .welcome-hero-overlay {
+        background:
+          linear-gradient(
+            to top,
+            rgba(8, 28, 58, 0.92) 0%,
+            rgba(8, 28, 58, 0.72) 48%,
+            rgba(8, 28, 58, 0.4) 100%
+          );
+      }
+    }
+  </style>
+{% endblock %}
+
+{% block hero %}{% endblock %}
+
+{% block content %}
+  <section class="welcome-hero mb-4" aria-label="Welcome">
+    <div
+      class="welcome-hero-media"
+      aria-hidden="true"
+      style="background-image: url('{{ welcome_photo_url }}');"
+    >
+      <img
+        src="{{ welcome_photo_url }}"
+        alt="Students collaborating on a project around a laptop"
+        width="1920"
+        height="1080"
+      />
+    </div>
+    <div class="welcome-hero-overlay" aria-hidden="true"></div>
+
+    <div class="content">
+      <div class="col-lg-8 col-xl-7 px-0">
+        {% if nav_school %}
+          <div class="d-flex flex-wrap align-items-center gap-3 mb-3">
+            {% if nav_school.logo %}
+              <img src="{{ nav_school.logo.url }}" alt="{{ nav_school.name }} logo" class="school-logo-hero" />
+            {% endif %}
+            <div>
+              <div class="small text-uppercase opacity-85 mb-1">ProjectTrack UG</div>
+              <div class="fw-semibold">{{ nav_school.name }}</div>
+            </div>
+          </div>
+          <h1 class="brand-mark">{{ nav_school.name }}</h1>
+          {% if nav_school.motto %}
+            <p class="fs-5 fst-italic opacity-90 mb-3">"{{ nav_school.motto }}"</p>
+          {% endif %}
+        {% else %}
+          <div class="small text-uppercase opacity-85 mb-2">Uganda Secondary Schools</div>
+          <h1 class="brand-mark">ProjectTrack UG</h1>
+        {% endif %}
+
+        <p class="lead-copy">
+          Supervise student projects, record competency scores, and keep photo evidence organised — from planning through dissemination.
+        </p>
+
+        <p class="small developer-line">
+          Developed by <strong>KYEYUNE FRANK</strong>
+        </p>
+
+        <div class="d-flex flex-wrap gap-2">
+          {% if user.is_authenticated and dashboard_url_name %}
+            <a class="btn btn-light btn-lg fw-semibold" style="color: var(--pt-primary)" href="{% url dashboard_url_name %}">Go to my dashboard</a>
+            <a class="btn btn-outline-light btn-lg" href="{% url 'account_settings' %}">Account settings</a>
+            {% if nav_role == Role.OVERALL_SUPERVISOR %}
+              <a class="btn btn-outline-light btn-lg" href="{% url 'overall_upload_logo' %}">School profile</a>
+            {% endif %}
+          {% else %}
+            <a class="btn btn-light btn-lg fw-semibold" style="color: var(--pt-primary)" href="{% url 'login' %}">Login</a>
+            <a class="btn btn-outline-light btn-lg" href="{% url 'register_school' %}">Register your school</a>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </section>
+
+  {% if nav_school %}
+  {% if nav_school.vision or nav_school.mission %}
+  <div class="row g-3 mb-4">
+    {% if nav_school.vision %}
+      <div class="col-md-{% if nav_school.mission %}6{% else %}12{% endif %}">
+        <div class="card school-identity-card shadow-sm h-100">
+          <div class="card-body p-4">
+            <h2 class="h6 card-title text-uppercase mb-2">Our vision</h2>
+            <p class="mb-0 text-muted">{{ nav_school.vision|linebreaksbr }}</p>
+          </div>
+        </div>
+      </div>
+    {% endif %}
+    {% if nav_school.mission %}
+      <div class="col-md-{% if nav_school.vision %}6{% else %}12{% endif %}">
+        <div class="card school-identity-card shadow-sm h-100">
+          <div class="card-body p-4">
+            <h2 class="h6 card-title text-uppercase mb-2">Our mission</h2>
+            <p class="mb-0 text-muted">{{ nav_school.mission|linebreaksbr }}</p>
+          </div>
+        </div>
+      </div>
+    {% endif %}
+  </div>
+  {% endif %}
+  {% endif %}
+
+  <div class="card competency-strip shadow-sm mb-4">
+    <div class="card-body p-4">
+      <div class="row g-3 align-items-start">
+        <div class="col-lg-4">
+          <h2 class="h5 fw-bold mb-2">Four competencies tracked</h2>
+          <p class="text-muted mb-0 small">
+            Built around the secondary school project assessment cycle — from first plan to final presentation.
+          </p>
+        </div>
+        <div class="col-lg-8">
+          <ul class="list-unstyled mb-0 row g-0">
+            <li class="col-md-6 pe-md-3">✓ Project planning</li>
+            <li class="col-md-6">✓ Project implementation</li>
+            <li class="col-md-6 pe-md-3">✓ Project reporting</li>
+            <li class="col-md-6">✓ Project dissemination</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-4">
+    <div class="col-md-6 col-xl-3">
+      <div class="card feature-card h-100">
+        <div class="card-body">
+          <div class="icon-badge icon-badge-1 mb-3">1</div>
+          <h3 class="h6 fw-semibold">Supervisor management</h3>
+          <p class="text-muted small mb-0">Upload supervisors via Excel/CSV and auto-generate secure login credentials.</p>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-6 col-xl-3">
+      <div class="card feature-card h-100">
+        <div class="card-body">
+          <div class="icon-badge icon-badge-2 mb-3">2</div>
+          <h3 class="h6 fw-semibold">Student assignment</h3>
+          <p class="text-muted small mb-0">The overall supervisor adds students and assigns each learner to the right project supervisor.</p>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-6 col-xl-3">
+      <div class="card feature-card h-100">
+        <div class="card-body">
+          <div class="icon-badge icon-badge-3 mb-3">3</div>
+          <h3 class="h6 fw-semibold">Competency scoring</h3>
+          <p class="text-muted small mb-0">Enter percentage scores (0–100%) per competency for every student.</p>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-6 col-xl-3">
+      <div class="card feature-card h-100">
+        <div class="card-body">
+          <div class="icon-badge icon-badge-4 mb-3">4</div>
+          <h3 class="h6 fw-semibold">Photo evidence</h3>
+          <p class="text-muted small mb-0">Upload project photos per student; overall supervisors can view and download.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm">
+    <div class="card-body p-4 d-flex flex-wrap align-items-center justify-content-between gap-3">
+      <div>
+        {% if user.is_authenticated %}
+          <h2 class="h5 mb-1">Welcome back, {{ user.username }}</h2>
+          {% if nav_school %}
+            <p class="text-muted mb-0">{{ nav_school.name }} — open your dashboard to manage supervisors, students, scores, and evidence.</p>
+          {% else %}
+            <p class="text-muted mb-0">Open your dashboard to manage supervisors, students, scores, and evidence.</p>
+          {% endif %}
+        {% else %}
+          <h2 class="h5 mb-1">Ready to get started?</h2>
+          <p class="text-muted mb-0">Register your school as the overall project supervisor, or login if you already have an account.</p>
+        {% endif %}
+      </div>
+      <div class="d-flex gap-2">
+        {% if user.is_authenticated and dashboard_url_name %}
+          <a class="btn btn-primary" href="{% url dashboard_url_name %}">My dashboard</a>
+        {% else %}
+          <a class="btn btn-primary" href="{% url 'login' %}">Login</a>
+          <a class="btn btn-success" href="{% url 'register_school' %}">Create account</a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="card developer-credit shadow-sm mt-4">
+    <div class="card-body p-4 text-center">
+      <div class="small text-muted text-uppercase mb-1">Developer</div>
+      <div class="h5 mb-0 fw-bold developer-name">KYEYUNE FRANK</div>
+      <p class="text-muted small mb-0 mt-2">
+        Developer of ProjectTrack UG — secondary school project supervision &amp; competency assessment
+      </p>
+    </div>
+  </div>
+{% endblock %}

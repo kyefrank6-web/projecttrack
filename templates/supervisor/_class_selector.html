@@ -1,0 +1,24 @@
+{% if assigned_classes|length > 1 %}
+  <div class="card mb-3">
+    <div class="card-body py-3">
+      <div class="d-flex flex-wrap align-items-center gap-2">
+        <span class="fw-semibold me-1">Class:</span>
+        {% for c in assigned_classes %}
+          <a
+            class="btn btn-sm {% if class_filter == c %}btn-primary{% else %}btn-outline-primary{% endif %}"
+            href="?class={{ c }}"
+          >
+            {{ c }}
+          </a>
+        {% endfor %}
+      </div>
+      <p class="text-muted small mb-0 mt-2">
+        Select a class to view and work with those learners only.
+      </p>
+    </div>
+  </div>
+{% elif assigned_classes|length == 1 %}
+  <div class="mb-3">
+    <span class="badge text-bg-primary fs-6">Class {{ assigned_classes.0 }}</span>
+  </div>
+{% endif %}

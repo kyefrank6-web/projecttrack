@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block title %}Observation checklists · ProjectTrack UG{% endblock %}
+
+{% block hero %}
+  <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between">
+    <div>
+      <h1 class="h4 mb-1">Observation checklists</h1>
+      <div class="text-muted">Official PDFs for {{ year }} — use when scoring your students</div>
+    </div>
+    <a class="btn btn-outline-light border" href="{% url 'supervisor_dashboard' %}">Back</a>
+  </div>
+{% endblock %}
+
+{% block content %}
+  {% if class_project_themes %}
+    <div class="card mb-3 border-info">
+      <div class="card-header bg-info-subtle fw-semibold">Project themes ({{ year }})</div>
+      <div class="card-body p-0">
+        <ul class="list-group list-group-flush">
+          {% for class_level, theme_obj in class_project_themes.items %}
+            <li class="list-group-item">
+              <span class="badge text-bg-primary mb-1">{{ class_level }}</span>
+              {% if theme_obj.coverage_label %}
+                <span class="text-muted small ms-1">{{ theme_obj.coverage_label }}</span>
+              {% endif %}
+              <p class="mb-0 small">{{ theme_obj.theme|linebreaksbr }}</p>
+            </li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+  {% endif %}
+  <div class="card">
+    <div class="card-body">
+      {% if checklists %}
+        <ul class="list-group list-group-flush">
+          {% for cl in checklists %}
+            <li class="list-group-item d-flex flex-wrap align-items-center justify-content-between gap-2">
+              <div>
+                <div class="fw-semibold">{{ cl.title }}</div>
+                <div class="small text-muted">
+                  {% if cl.cohort_year %}Cohort {{ cl.cohort_year }} · {% endif %}
+                  Year {{ cl.year }}
+                  · Class {{ cl.class_level }}
+                  {% if cl.term %} · Term {{ cl.term }}{% endif %}
+                </div>
+              </div>
+              <a class="btn btn-sm btn-primary" href="{% url 'download_observation_checklist' cl.id %}">Download PDF</a>
+            </li>
+          {% endfor %}
+        </ul>
+        <p class="text-muted small mt-3 mb-0">
+          Open <strong>My students</strong> → <strong>Observe &amp; score</strong> to select observations; percentages are calculated automatically.
+        </p>
+      {% else %}
+        <p class="text-muted mb-0">No observation checklist for {{ year }} yet. Ask your overall supervisor to upload one.</p>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}

@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}Add student · ProjectTrack UG{% endblock %}
+
+{% block hero %}
+  <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between">
+    <div>
+      <h1 class="h4 mb-1">Add student manually</h1>
+      <div class="text-muted">Register one learner and assign a supervisor. The supervisor will add the project title later.</div>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <a class="btn btn-outline-light border" href="{% url 'upload_students' %}">Bulk upload</a>
+      <a class="btn btn-outline-light border" href="{% url 'overall_dashboard' %}">Back</a>
+    </div>
+  </div>
+{% endblock %}
+
+{% block content %}
+  <div class="row justify-content-center">
+    <div class="col-12 col-lg-8">
+      {% if not has_supervisors %}
+        <div class="alert alert-warning">
+          You need at least one supervisor before adding students.
+          <a href="{% url 'overall_add_supervisor' %}">Add a supervisor</a> or
+          <a href="{% url 'upload_supervisors' %}">upload supervisors</a> first.
+        </div>
+      {% endif %}
+
+      <div class="card">
+        <div class="card-body p-4">
+          <form method="post" class="vstack gap-3">
+            {% csrf_token %}
+
+            <div>
+              <label class="form-label">{{ form.full_name.label }}</label>
+              {{ form.full_name }}
+              {% for e in form.full_name.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+            </div>
+
+            <div>
+              <label class="form-label">{{ form.student_no.label }}</label>
+              {{ form.student_no }}
+              {% for e in form.student_no.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+            </div>
+
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label">{{ form.class_level.label }}</label>
+                {{ form.class_level }}
+                {% for e in form.class_level.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">{{ form.stream.label }}</label>
+                {{ form.stream }}
+                {% for e in form.stream.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+              </div>
+            </div>
+
+            <div>
+              <label class="form-label">{{ form.supervisor.label }}</label>
+              {{ form.supervisor }}
+              <div class="form-text">
+                Optional. Choose “No supervisor” if you will assign later.
+                {% if not has_supervisors %}Add supervisors first if you want to assign now.{% endif %}
+              </div>
+              {% for e in form.supervisor.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+            </div>
+
+            <p class="text-muted small mb-0">
+              Project title is not entered here. The assigned supervisor sets it under <strong>Observe &amp; score</strong>.
+            </p>
+
+            <button class="btn btn-primary" type="submit">Add student</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}

@@ -1,0 +1,269 @@
+{% extends "base.html" %}
+
+{% load core_extras %}
+
+
+
+{% block title %}Supervisor dashboard · ProjectTrack UG{% endblock %}
+
+
+
+{% block head %}
+
+  <style>
+
+    .dash-welcome {
+
+      background: linear-gradient(135deg, #198754 0%, #0b5ed7 100%);
+
+      color: #fff;
+
+      border-radius: 18px;
+
+      padding: 1.75rem 2rem;
+
+    }
+
+  </style>
+
+{% endblock %}
+
+
+
+{% block hero %}
+
+  <div class="dash-welcome">
+
+    <div class="d-flex flex-wrap gap-3 align-items-center justify-content-between">
+
+      <div>
+
+        <span class="badge bg-white text-success mb-2">Project Supervisor</span>
+
+        <h1 class="h4 mb-1 fw-bold">Welcome, {{ user.first_name|default:user.username }}</h1>
+
+        <p class="mb-0 opacity-90">Score your assigned students and upload project photo evidence</p>
+
+      </div>
+
+      {% if has_observation_checklist %}
+
+        <div class="d-flex gap-2 flex-wrap">
+
+          <a class="btn btn-outline-light" href="{% url 'supervisor_observation_checklists' %}?year={{ current_year }}">Observation PDFs</a>
+
+        </div>
+
+      {% endif %}
+
+    </div>
+
+  </div>
+
+{% endblock %}
+
+
+
+{% block content %}
+
+  {% include "supervisor/_class_selector.html" %}
+
+
+
+  {% if has_observation_checklist %}
+
+    <div class="alert alert-info mb-3">
+
+      Observation checklists are <strong>per class</strong>. Use <strong>Observe &amp; score</strong> only for students whose class has a checklist uploaded for {{ current_year }}.
+
+      <a href="{% url 'supervisor_observation_checklists' %}?year={{ current_year }}">View PDFs by class</a>.
+
+    </div>
+
+  {% endif %}
+
+
+
+  {% if class_project_themes %}
+
+    <div class="card mb-3 border-info">
+
+      <div class="card-header bg-info-subtle fw-semibold">
+
+        Project theme{% if class_filter %} — Class {{ class_filter }}{% endif %} ({{ current_year }})
+
+      </div>
+
+      <div class="card-body p-0">
+
+        <ul class="list-group list-group-flush">
+
+          {% for class_level, theme_obj in class_project_themes.items %}
+
+            <li class="list-group-item">
+
+              {% if not class_filter %}
+
+                <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+
+                  <span class="badge text-bg-primary">{{ class_level }}</span>
+
+                  {% if theme_obj.coverage_label %}
+
+                    <span class="text-muted small">{{ theme_obj.coverage_label }}</span>
+
+                  {% endif %}
+
+                </div>
+
+              {% endif %}
+
+              <p class="mb-0 small">{{ theme_obj.theme|linebreaksbr }}</p>
+
+            </li>
+
+          {% endfor %}
+
+        </ul>
+
+      </div>
+
+    </div>
+
+  {% endif %}
+
+
+
+  <div class="card">
+
+    <div class="card-body">
+
+      <h2 class="h5 mb-3">
+
+        My students
+
+        {% if class_filter %}
+
+          <span class="text-muted fw-normal">— Class {{ class_filter }}</span>
+
+        {% endif %}
+
+      </h2>
+
+      <p class="text-muted small mb-2">
+
+        <strong>—</strong> = competency not scored yet. Percentages appear after you complete that competency in <strong>Observe &amp; score</strong>.
+
+      </p>
+
+      <div class="table-responsive">
+
+        <table class="table table-striped align-middle mb-0">
+
+          <thead class="table-light">
+
+            <tr>
+
+              <th>Student</th>
+
+              <th>Project title</th>
+
+              {% if not class_filter %}
+
+                <th>Class</th>
+
+              {% endif %}
+
+              <th>Stream</th>
+
+              <th>Student No</th>
+
+              {% for c in competencies %}
+
+                <th class="text-center small">{{ c.name }}</th>
+
+              {% endfor %}
+
+              <th style="width: 120px">Actions</th>
+
+            </tr>
+
+          </thead>
+
+          <tbody>
+
+            {% for row in student_rows %}
+
+              {% with s=row.student %}
+
+              <tr>
+
+                <td class="fw-semibold">{{ s.full_name }}</td>
+
+                <td class="text-muted small">{{ s.project_title|default:"—" }}</td>
+
+                {% if not class_filter %}
+
+                  <td><span class="badge text-bg-primary">{{ s.class_level }}</span></td>
+
+                {% endif %}
+
+                <td>{{ s.stream }}</td>
+
+                <td>{{ s.student_no }}</td>
+
+                {% for c in competencies %}
+
+                  <td class="text-center">{{ row.score_map|format_competency_score:c.id }}</td>
+
+                {% endfor %}
+
+                <td>
+
+                  <a class="btn btn-sm btn-primary" href="{% url 'score_student' s.id %}">
+
+                    {% if s.class_level in checklist_class_levels %}Observe &amp; score{% else %}Scores{% endif %}
+
+                  </a>
+
+                </td>
+
+              </tr>
+
+              {% endwith %}
+
+            {% empty %}
+
+              <tr>
+
+                <td colspan="{{ competencies|length|add:5 }}" class="text-muted py-4 text-center">
+
+                  {% if assigned_classes and not class_filter %}
+
+                    Select a class above to view your students.
+
+                  {% else %}
+
+                    No students assigned in this class yet. Ask your overall supervisor to add or upload students for you.
+
+                  {% endif %}
+
+                </td>
+
+              </tr>
+
+            {% endfor %}
+
+          </tbody>
+
+        </table>
+
+      </div>
+
+    </div>
+
+  </div>
+
+{% endblock %}
+
+

@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block title %}Photo evidence · ProjectTrack UG{% endblock %}
+
+{% block hero %}
+  <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between">
+    <div>
+      <h1 class="h4 mb-1">Photo evidence</h1>
+      <div class="text-muted">Upload and manage project photos for your students</div>
+    </div>
+    <a class="btn btn-outline-light border" href="{% url 'supervisor_dashboard' %}{% if class_filter %}?class={{ class_filter }}{% endif %}">Back</a>
+  </div>
+{% endblock %}
+
+{% block content %}
+  {% include "supervisor/_class_selector.html" %}
+
+  <div class="card">
+    <div class="card-body">
+      <h2 class="h6 mb-3">
+        Photo evidence
+        {% if class_filter %}<span class="text-muted fw-normal">— Class {{ class_filter }}</span>{% endif %}
+      </h2>
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Student</th>
+              <th>Project title</th>
+              {% if not class_filter %}
+                <th>Class</th>
+              {% endif %}
+              <th>Stream</th>
+              <th>Evidence (3)</th>
+              <th style="width: 160px">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in rows %}
+              <tr>
+                <td class="fw-semibold">{{ row.student.full_name }}</td>
+                <td class="small">{{ row.student.project_title|default:"—" }}</td>
+                {% if not class_filter %}
+                  <td>{{ row.student.class_level }}</td>
+                {% endif %}
+                <td>{{ row.student.stream }}</td>
+                <td>
+                  {% if row.evidence_complete %}
+                    <span class="badge text-bg-success">3/3 Complete</span>
+                  {% else %}
+                    <span class="badge text-bg-warning">{{ row.photo_count }}/3</span>
+                  {% endif %}
+                </td>
+                <td>
+                  <a class="btn btn-sm btn-success" href="{% url 'upload_evidence' row.student.id %}">
+                    Manage
+                  </a>
+                </td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="8" class="text-muted">
+                  {% if class_filter %}
+                    No students assigned in Class {{ class_filter }} yet.
+                  {% else %}
+                    No students assigned yet.
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+{% endblock %}

@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% block title %}{{ supervisor_display }} · Students · ProjectTrack UG{% endblock %}
+
+{% block hero %}
+  <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between">
+    <div>
+      <h1 class="h4 mb-1">{{ supervisor_display }}</h1>
+      <div class="text-muted">
+        @{{ supervisor.username }} · {{ student_count }} student{{ student_count|pluralize }}
+      </div>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <a class="btn btn-primary" href="{% url 'overall_add_student' %}?supervisor={{ supervisor.id }}">Add student</a>
+      <a class="btn btn-outline-light border" href="{% url 'overall_supervisors' %}">All supervisors</a>
+      <a class="btn btn-outline-light border" href="{% url 'overall_dashboard' %}">Dashboard</a>
+    </div>
+  </div>
+{% endblock %}
+
+{% block content %}
+  {% include "overall/_search_bar.html" with search_q=search_q search_action=request.path placeholder="Search this supervisor's students…" %}
+
+  <div class="card">
+    <div class="card-body">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Student</th>
+              <th>Student No</th>
+              <th>Class</th>
+              <th>Stream</th>
+              <th>Project title</th>
+              <th style="width: 200px">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for student in students %}
+              <tr>
+                <td class="fw-semibold">{{ student.full_name }}</td>
+                <td>{{ student.student_no|default:"—" }}</td>
+                <td>{{ student.class_level }}</td>
+                <td>{{ student.stream|default:"—" }}</td>
+                <td class="small">{{ student.project_title|default:"—" }}</td>
+                <td>
+                  <div class="d-flex gap-1 flex-wrap">
+                    <a class="btn btn-sm btn-outline-secondary" href="{% url 'overall_edit_student' student.id %}">
+                      Edit
+                    </a>
+                    <a
+                      class="btn btn-sm btn-primary"
+                      href="{% url 'overall_edit_student_scores' student.id %}"
+                    >
+                      Edit scores
+                    </a>
+                    <form
+                      method="post"
+                      action="{% url 'overall_delete_student' student.id %}"
+                      class="d-inline"
+                      onsubmit="return confirm('Permanently delete {{ student.full_name }}?');"
+                    >
+                      {% csrf_token %}
+                      <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
+                    </form>
+                  </div>
+                </td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="6" class="text-muted">
+                  {% if search_q %}
+                    No students match your search.
+                  {% else %}
+                    This supervisor has no students assigned yet.
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+{% endblock %}
