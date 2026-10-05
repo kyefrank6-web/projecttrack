@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from django.contrib.auth import get_user_model
-from django.contrib.auth.backends import ModelBackend
+from django.contrib.auth.backends import ModelBackend as DjangoModelBackend
 from django.contrib.auth.hashers import check_password
 
+from .maintenance_utils import is_maintenance_mode, user_is_platform_superadmin
 from .models import Role, UserProfile
 
 User = get_user_model()
@@ -55,12 +56,33 @@ def _resolve_active_membership(
         return min(supervisor_memberships, key=lambda m: m.id)
 
     if school_password_matches:
-        return min(school_password_matches, key=lambda m: m.id)
+        return min(
+            school_password_matches,
+            key=lambda m: (
+                0 if m.role == Role.OVERALL_SUPERVISOR else 1,
+                m.id,
+            ),
+        )
 
-    return min(memberships, key=lambda m: m.id)
+    return min(
+        memberships,
+        key=lambda m: (0 if m.role == Role.OVERALL_SUPERVISOR else 1, m.id),
+    )
 
 
-class SchoolScopedBackend(ModelBackend):
+class ModelBackend(DjangoModelBackend):
+    """Fallback auth that respects maintenance mode (platform superadmin only)."""
+
+    def authenticate(self, request, username=None, password=None, **kwargs):
+        user = super().authenticate(request, username=username, password=password, **kwargs)
+        if user is None:
+            return None
+        if is_maintenance_mode() and not user_is_platform_superadmin(user):
+            return None
+        return user
+
+
+class SchoolScopedBackend(DjangoModelBackend):
     """
     Authenticate using per-school password on UserProfile.
 
@@ -108,6 +130,9 @@ class SchoolScopedBackend(ModelBackend):
             return None
 
         if not any(_password_grants_access(user, m, password) for m in memberships):
+            return None
+
+        if is_maintenance_mode() and not user_is_platform_superadmin(user):
             return None
 
         if request is not None:

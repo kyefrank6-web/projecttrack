@@ -334,6 +334,39 @@ class SchoolRejectForm(forms.Form):
     )
 
 
+class SchoolDeleteConfirmForm(forms.Form):
+    school_name_confirm = forms.CharField(
+        max_length=200,
+        label="Type the school name exactly to confirm",
+        widget=forms.TextInput(
+            attrs={
+                "class": "form-control",
+                "autocomplete": "off",
+                "placeholder": "School name",
+            }
+        ),
+    )
+    understand = forms.BooleanField(
+        label="I understand this deactivates the school for 30 days before permanent deletion",
+        required=True,
+        widget=forms.CheckboxInput(attrs={"class": "form-check-input"}),
+    )
+
+    def __init__(self, *args, expected_name: str = "", **kwargs):
+        self.expected_name = (expected_name or "").strip()
+        super().__init__(*args, **kwargs)
+
+    def clean_school_name_confirm(self):
+        typed = (self.cleaned_data.get("school_name_confirm") or "").strip()
+        if not self.expected_name:
+            raise ValidationError("Cannot verify school name.")
+        if typed.casefold() != self.expected_name.casefold():
+            raise ValidationError(
+                "The name you entered does not match this school. Deletion was not performed."
+            )
+        return typed
+
+
 class RegisterSchoolForm(forms.Form):
     school_name = forms.CharField(max_length=200)
     overall_username = forms.CharField(max_length=150)

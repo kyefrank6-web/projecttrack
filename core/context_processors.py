@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from .maintenance_utils import is_maintenance_mode, maintenance_message
 from .models import Role, SecondaryClassLevel, UserProfile
 from .themes import DEFAULT_THEME_KEY, get_theme
 
@@ -36,6 +37,8 @@ def navigation(request):
                 school_theme = get_theme(nav_school.theme)
 
     return {
+        "maintenance_mode": is_maintenance_mode(),
+        "maintenance_message": maintenance_message(),
         "nav_role": role,
         "Role": Role,
         "nav_class_levels": [c for c, _ in SecondaryClassLevel.choices],

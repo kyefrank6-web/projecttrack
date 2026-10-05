@@ -23,7 +23,7 @@ def get_active_profile(request: HttpRequest) -> UserProfile | None:
     return (
         UserProfile.objects.filter(user_id=request.user.id)
         .select_related("school")
-        .order_by("id")
+        .order_by("school_id", "role", "id")
         .first()
     )
 

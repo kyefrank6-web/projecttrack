@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+
+{% block title %}System update · ProjectTrack UG{% endblock %}
+
+{% block hero %}
+  <div>
+    <h1 class="h4 mb-1">System update in progress</h1>
+    <div class="text-muted">ProjectTrack UG is temporarily unavailable</div>
+  </div>
+{% endblock %}
+
+{% block content %}
+  <div class="card">
+    <div class="card-body p-4">
+      <div class="alert alert-info mb-3">
+        {{ maintenance_message }}
+      </div>
+      <p class="text-muted mb-3">
+        School staff and supervisors cannot sign in during this time. Platform administrators may still sign in to manage the system.
+      </p>
+      <a class="btn btn-primary" href="{% url 'login' %}">Go to login</a>
+    </div>
+  </div>
+{% endblock %}

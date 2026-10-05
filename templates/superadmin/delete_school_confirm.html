@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+
+{% block title %}Confirm deactivation · {{ school.name }}{% endblock %}
+
+{% block hero %}
+  <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between">
+    <div>
+      <h1 class="h4 mb-1 text-danger">Confirm school deactivation</h1>
+      <div class="text-muted">Step 2 of 2 — verify before deactivating {{ school.name }}</div>
+    </div>
+    <a class="btn btn-outline-light border" href="{% url 'superadmin_school_detail' school.id %}">Cancel</a>
+  </div>
+{% endblock %}
+
+{% block content %}
+  <div class="row g-3">
+    <div class="col-12 col-lg-7">
+      <div class="card border-danger">
+        <div class="card-body p-4">
+          <div class="alert alert-danger small">
+            <strong>Deactivation starts immediately.</strong> For {{ grace_days }} days the school account is disabled
+            (no logins). After that, the system permanently deletes:
+            <ul class="mb-0 mt-2">
+              <li>All supervisors and the overall supervisor account for this school</li>
+              <li>All students, scores, and observation data</li>
+              <li>All photo evidence and the school logo</li>
+            </ul>
+          </div>
+
+          <p class="mb-3">
+            To continue, type the school name <strong>{{ school.name }}</strong> exactly as shown,
+            then confirm below. You can reactivate the school before the {{ grace_days }}-day period ends.
+          </p>
+
+          <form method="post" class="vstack gap-3">
+            {% csrf_token %}
+
+            <div>
+              <label class="form-label" for="id_school_name_confirm">{{ form.school_name_confirm.label }}</label>
+              {{ form.school_name_confirm }}
+              {% for e in form.school_name_confirm.errors %}
+                <div class="text-danger small">{{ e }}</div>
+              {% endfor %}
+            </div>
+
+            <div class="form-check">
+              {{ form.understand }}
+              <label class="form-check-label" for="id_understand">{{ form.understand.label }}</label>
+              {% for e in form.understand.errors %}
+                <div class="text-danger small">{{ e }}</div>
+              {% endfor %}
+            </div>
+
+            {% if form.non_field_errors %}
+              <div class="alert alert-danger small mb-0">
+                {% for e in form.non_field_errors %}{{ e }}{% endfor %}
+              </div>
+            {% endif %}
+
+            <div class="d-flex flex-wrap gap-2">
+              <button class="btn btn-danger" type="submit">Deactivate school</button>
+              <a class="btn btn-outline-secondary" href="{% url 'superadmin_school_detail' school.id %}">Go back</a>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}

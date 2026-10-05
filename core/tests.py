@@ -228,3 +228,187 @@ class SupervisorUploadTests(TestCase):
             self.assertTrue(username.replace(".", "").replace("_", "").replace("-", "").isalnum())
         self.assertIn("matayo", usernames)
         self.assertIn("okello", usernames)
+
+
+class OverallSupervisorAsSupervisorTests(TestCase):
+    def test_overall_username_can_be_added_as_supervisor(self):
+        from .school_utils import ensure_supervisor_membership
+        from .views import _provision_school_supervisor
+
+        school = School.objects.create(
+            name="Dual Role HS",
+            status=SchoolRegistrationStatus.APPROVED,
+        )
+        overall = User.objects.create_user("head_teacher", "", "OverallPass123!")
+        school.overall_supervisor = overall
+        school.save(update_fields=["overall_supervisor"])
+        UserProfile.objects.create(
+            user=overall,
+            school=school,
+            role=Role.OVERALL_SUPERVISOR,
+            school_password=overall.password,
+        )
+        from django.contrib.auth.hashers import make_password
+
+        ensure_supervisor_membership(
+            school=school,
+            user=overall,
+            password_hash=make_password("SupervisorOnly123!"),
+        )
+        self.assertEqual(
+            UserProfile.objects.filter(user=overall, school=school).count(),
+            2,
+        )
+
+        creds = _provision_school_supervisor(
+            school=school,
+            full_name="Head Teacher",
+            username="head_teacher",
+        )
+        self.assertEqual(creds["username"], "head_teacher")
+        self.assertEqual(
+            UserProfile.objects.filter(
+                user=overall, school=school, role=Role.SUPERVISOR
+            ).count(),
+            1,
+        )
+        self.assertIn("supervisor", creds["note"].lower())
+
+
+class MaintenanceModePlatformToggleTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_user("toggle_admin", password="AdminPass123!")
+        self.profile = UserProfile.objects.create(
+            user=self.admin,
+            school=None,
+            role=Role.SUPERADMIN,
+            school_password=self.admin.password,
+        )
+        self.overall = User.objects.create_user("toggle_overall", password="SchoolPass123!")
+        school = School.objects.create(name="Toggle HS", status=SchoolRegistrationStatus.APPROVED)
+        UserProfile.objects.create(
+            user=self.overall,
+            school=school,
+            role=Role.OVERALL_SUPERVISOR,
+            school_password=self.overall.password,
+        )
+
+    def test_superadmin_can_toggle_maintenance_from_dashboard(self):
+        from django.urls import reverse
+
+        from .models import PlatformSettings
+
+        self.client.force_login(self.admin)
+        session = self.client.session
+        session["active_membership_id"] = self.profile.id
+        session.save()
+
+        response = self.client.post(
+            reverse("superadmin_toggle_maintenance"),
+            {"action": "enable", "maintenance_message": "Upgrading now."},
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(PlatformSettings.get().maintenance_enabled)
+
+        response = self.client.post("/login/", {"username": "toggle_overall", "password": "SchoolPass123!"})
+        self.assertEqual(response.status_code, 200)
+
+        response = self.client.post(
+            reverse("superadmin_toggle_maintenance"),
+            {"action": "disable"},
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertFalse(PlatformSettings.get().maintenance_enabled)
+
+        response = self.client.post("/login/", {"username": "toggle_overall", "password": "SchoolPass123!"})
+        self.assertEqual(response.status_code, 302)
+
+
+class MaintenanceModeTests(TestCase):
+    def setUp(self):
+        self.school = School.objects.create(name="Maint HS", status=SchoolRegistrationStatus.APPROVED)
+        self.overall = User.objects.create_user("maint_overall", password="SchoolPass123!")
+        UserProfile.objects.create(
+            user=self.overall,
+            school=self.school,
+            role=Role.OVERALL_SUPERVISOR,
+            school_password=self.overall.password,
+        )
+        self.admin = User.objects.create_user("maint_admin", password="AdminPass123!")
+        UserProfile.objects.create(
+            user=self.admin,
+            school=None,
+            role=Role.SUPERADMIN,
+            school_password=self.admin.password,
+        )
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        from django.test import override_settings
+
+        cls._settings = override_settings(MAINTENANCE_MODE=True)
+        cls._settings.enable()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._settings.disable()
+        super().tearDownClass()
+
+    def test_school_user_cannot_login(self):
+        response = self.client.post(
+            "/login/",
+            {"username": "maint_overall", "password": "SchoolPass123!"},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(response.wsgi_request.user.is_authenticated)
+
+    def test_superadmin_can_login(self):
+        response = self.client.post(
+            "/login/",
+            {"username": "maint_admin", "password": "AdminPass123!"},
+        )
+        self.assertEqual(response.status_code, 302)
+
+    def test_logged_in_school_user_is_signed_out_on_request(self):
+        self.client.force_login(self.overall)
+        response = self.client.get("/overall/")
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("/login/", response.url)
+
+
+class SchoolDeactivationTests(TestCase):
+    def setUp(self):
+        self.admin = User.objects.create_user(username="platform", password="test")
+        self.school = School.objects.create(
+            name="Grace High",
+            status=SchoolRegistrationStatus.APPROVED,
+        )
+
+    def test_deactivate_then_restore(self):
+        from .school_utils import deactivate_school, restore_deactivated_school
+
+        deactivate_school(school=self.school, by_user=self.admin)
+        self.school.refresh_from_db()
+        self.assertEqual(self.school.status, SchoolRegistrationStatus.DEACTIVATED)
+        self.assertIsNotNone(self.school.deactivated_at)
+
+        restore_deactivated_school(school=self.school)
+        self.school.refresh_from_db()
+        self.assertEqual(self.school.status, SchoolRegistrationStatus.APPROVED)
+        self.assertIsNone(self.school.deactivated_at)
+
+    def test_purge_after_grace_period(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from .school_utils import purge_expired_deactivated_schools
+
+        self.school.status = SchoolRegistrationStatus.DEACTIVATED
+        self.school.deactivated_at = timezone.now() - timedelta(days=31)
+        self.school.save(update_fields=["status", "deactivated_at"])
+
+        removed = purge_expired_deactivated_schools()
+        self.assertEqual(removed, ["Grace High"])
+        self.assertFalse(School.objects.filter(name="Grace High").exists())

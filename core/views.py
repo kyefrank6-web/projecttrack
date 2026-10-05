@@ -41,6 +41,7 @@ from .forms import (
     SchoolBrandingForm,
     SchoolPasswordChangeForm,
     SchoolRejectForm,
+    SchoolDeleteConfirmForm,
     ScoreStudentForm,
     SetNewPasswordForm,
     StudentEditForm,
@@ -73,17 +74,24 @@ from .observation_utils import (
     save_competency_observation_ratings_and_score,
     save_observation_ratings_and_scores,
     seed_checklist_criteria,
+    submitted_competency_ids_for_assessment,
     uses_checkbox_scoring,
 )
 from .profile_utils import get_active_profile
 from .themes import THEMES
 from .school_utils import (
+    SCHOOL_DELETION_GRACE_DAYS,
     clear_registration_blockers,
+    deactivate_school,
     delete_all_students_from_school,
     delete_school_completely,
     delete_student_completely,
+    permanent_deletion_at,
+    purge_expired_deactivated_schools,
+    ensure_supervisor_membership,
     remove_all_supervisors_from_school,
     remove_supervisor_from_school,
+    restore_deactivated_school,
 )
 from .upload_utils import (
     SUPERVISOR_DEFAULT_COLUMNS,
@@ -142,11 +150,16 @@ class LoginView(DjangoLoginView):
 
         user = authenticate(request, username=username, password=password)
         if user is None:
-            messages.error(
-                request,
-                "Invalid username or password. Supervisors can use their account password "
-                "even when registered at more than one school.",
-            )
+            from .maintenance_utils import is_maintenance_mode, maintenance_message
+
+            if is_maintenance_mode():
+                messages.error(request, maintenance_message())
+            else:
+                messages.error(
+                    request,
+                    "Invalid username or password. Supervisors can use their account password "
+                    "even when registered at more than one school.",
+                )
             return self.render_to_response(self.get_context_data())
 
         login(request, user)
@@ -163,6 +176,12 @@ class LoginView(DjangoLoginView):
                     request,
                     "Your school registration was rejected. "
                     + (school.rejection_reason or "Contact the administrator for details."),
+                )
+                return self.render_to_response(self.get_context_data())
+            elif school.status == SchoolRegistrationStatus.DEACTIVATED:
+                messages.error(
+                    request,
+                    "Your school account has been deactivated and is scheduled for permanent removal.",
                 )
                 return self.render_to_response(self.get_context_data())
 
@@ -542,34 +561,29 @@ def _provision_school_supervisor(
         username = username.strip()
         existing_user = User.objects.filter(username=username).first()
         if existing_user:
-            membership, created = UserProfile.objects.get_or_create(
-                user=existing_user,
+            membership, created = ensure_supervisor_membership(
                 school=school,
-                defaults={
-                    "role": Role.SUPERVISOR,
-                    "school_password": password_hash,
-                    "must_change_password": True,
-                },
+                user=existing_user,
+                password_hash=password_hash,
+                must_change_password=True,
             )
-            if not created:
-                if membership.role != Role.SUPERVISOR:
-                    raise ValueError(
-                        f"'{username}' already has role {membership.get_role_display()} at this school."
-                    )
-                membership.school_password = password_hash
-                membership.must_change_password = True
-                membership.save(update_fields=["school_password", "must_change_password"])
             existing_user.first_name = full_name
             if email:
                 existing_user.email = email
                 existing_user.save(update_fields=["first_name", "email"])
             else:
                 existing_user.save(update_fields=["first_name"])
-            note = (
-                "Existing account linked to this school — use this school's password when logging in."
-                if not created
-                else "Existing username added to this school."
-            )
+            if not created and school.overall_supervisor_id == existing_user.id:
+                note = (
+                    "Overall supervisor also added as supervisor — use the supervisor "
+                    "password shown here to sign in with the supervisor role."
+                )
+            elif not created:
+                note = (
+                    "Existing account linked to this school — use this school's password when logging in."
+                )
+            else:
+                note = "Existing username added to this school."
             return {
                 "full_name": full_name,
                 "username": username,
@@ -1110,26 +1124,12 @@ def upload_supervisors(request):
                             username = _username_base_from_identity(username=username.strip())
                             existing_user = User.objects.filter(username=username).first()
                             if existing_user:
-                                membership, created = UserProfile.objects.get_or_create(
-                                    user=existing_user,
+                                _, created = ensure_supervisor_membership(
                                     school=profile.school,
-                                    defaults={
-                                        "role": Role.SUPERVISOR,
-                                        "school_password": password_hash,
-                                        "must_change_password": True,
-                                    },
+                                    user=existing_user,
+                                    password_hash=password_hash,
+                                    must_change_password=True,
                                 )
-                                if not created:
-                                    if membership.role != Role.SUPERVISOR:
-                                        raise ValueError(
-                                            f"Row {idx}: '{username}' already has role "
-                                            f"{membership.get_role_display()} at this school."
-                                        )
-                                    membership.school_password = password_hash
-                                    membership.must_change_password = True
-                                    membership.save(
-                                        update_fields=["school_password", "must_change_password"]
-                                    )
                                 existing_user.first_name = full_name
                                 if email:
                                     existing_user.email = email
@@ -1694,6 +1694,54 @@ def _existing_score_map(student: Student, scheme: AssessmentScheme, year: int, t
     return {sc.competency_id: sc.score for sc in assessment.scores.all()}
 
 
+def _save_single_competency_score(
+    request,
+    student: Student,
+    scheme: AssessmentScheme,
+    year: int,
+    term: int,
+    competency_id: int,
+) -> tuple[bool, str | None, str]:
+    """Save one competency percentage (UNEB phased submission)."""
+    competency = Competency.objects.filter(id=competency_id, scheme=scheme).first()
+    if not competency:
+        return False, "Invalid competency for this scheme.", ""
+
+    raw = (request.POST.get(f"score_{competency.id}") or "").strip()
+    if raw == "":
+        return False, f"Enter a score for {competency.name} before submitting.", competency.name
+    try:
+        val = Decimal(raw)
+        if val < 0 or val > 100:
+            return False, f"Score for {competency.name} must be between 0 and 100.", competency.name
+    except InvalidOperation:
+        return False, f"Invalid score for {competency.name}.", competency.name
+
+    with transaction.atomic():
+        assessment, _ = ProjectAssessment.objects.get_or_create(
+            student=student,
+            scheme=scheme,
+            year=year,
+            term=term,
+            defaults={"created_by": request.user},
+        )
+        assessment.created_by = request.user
+        assessment.save(update_fields=["created_by", "updated_at"])
+
+        now = timezone.now()
+        obj, created = CompetencyScore.objects.update_or_create(
+            assessment=assessment,
+            competency=competency,
+            defaults={"score": val, "submitted_at": now},
+        )
+        if not created:
+            obj.score = val
+            obj.submitted_at = now
+            obj.save(update_fields=["score", "submitted_at"])
+
+    return True, None, competency.name
+
+
 def _save_student_scores(
     request,
     student: Student,
@@ -1830,9 +1878,9 @@ def _render_score_form(
             if use_observation:
                 submit_competency = request.POST.get("submit_competency")
                 if not submit_competency or not str(submit_competency).isdigit():
-                    messages.error(
+                        messages.error(
                         request,
-                        "Select a competency and use its Submit button to save scores separately.",
+                        "UNEB phased submission: complete one competency and use its Submit button.",
                     )
                 else:
                     competency_id = int(submit_competency)
@@ -1870,11 +1918,35 @@ def _render_score_form(
                                 q += f"&scheme_id={scheme.id}"
                             return redirect(f"{request.path}{q}")
             else:
-                ok, err = _save_student_scores(request, student, scheme, year, term)
-                if ok:
-                    messages.success(request, "Student details and scores saved.")
-                    return redirect(back_url)
-                messages.error(request, err)
+                submit_competency = request.POST.get("submit_competency")
+                if not submit_competency or not str(submit_competency).isdigit():
+                    messages.error(
+                        request,
+                        "UNEB requires phased submission: use Submit on one competency at a time.",
+                    )
+                else:
+                    ok, err, comp_name = _save_single_competency_score(
+                        request,
+                        student,
+                        scheme,
+                        year,
+                        term,
+                        int(submit_competency),
+                    )
+                    if allow_project_title_edit:
+                        student.project_title = (request.POST.get("project_title") or "").strip()
+                        student.save(update_fields=["project_title"])
+                    if ok:
+                        raw = (request.POST.get(f"score_{submit_competency}") or "").strip()
+                        messages.success(
+                            request,
+                            f"{comp_name} submitted successfully — score: {raw}%.",
+                        )
+                        q = f"?year={year}&term={term}"
+                        if scheme:
+                            q += f"&scheme_id={scheme.id}"
+                        return redirect(f"{request.path}{q}")
+                    messages.error(request, err or "Could not save score.")
         scheme = (
             meta_form.cleaned_data["scheme"]
             if meta_form.is_valid()
@@ -1920,6 +1992,8 @@ def _render_score_form(
                 )
             else:
                 computed_percentages = {}
+        elif assessment:
+            submitted_competency_ids = submitted_competency_ids_for_assessment(assessment)
 
     existing_scores = (
         build_display_score_map(
@@ -2406,6 +2480,101 @@ def export_class_scores(request, class_level: str):
 
     filename = f"{profile.school.name}_{class_level}_{scheme.name}_{year}_T{term}.xlsx".replace(" ", "_")
     resp = HttpResponse(out.getvalue(), content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    resp["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return resp
+
+
+@login_required
+def export_class_competency_scores(request, class_level: str):
+    """Export scores for a single competency (UNEB phased submission file)."""
+    profile = _require_profile(request)
+    if not _is_overall(profile):
+        raise Http404()
+
+    class_level = class_level.upper()
+    if class_level not in {c for c, _ in SecondaryClassLevel.choices}:
+        raise Http404()
+
+    competency_id = request.GET.get("competency_id")
+    if not competency_id or not str(competency_id).isdigit():
+        raise Http404("Select a competency to export.")
+
+    year = int((request.GET.get("year") or timezone.now().year))
+    term = int((request.GET.get("term") or 1))
+    scheme = AssessmentScheme.objects.filter(active=True).order_by("id").first()
+    scheme_id = request.GET.get("scheme_id")
+    if scheme_id and scheme_id.isdigit():
+        scheme = AssessmentScheme.objects.filter(id=int(scheme_id)).first() or scheme
+    if not scheme:
+        raise Http404("No scheme configured")
+
+    competency = get_object_or_404(Competency, pk=int(competency_id), scheme=scheme)
+
+    students = list(
+        Student.objects.active_only()
+        .filter(school=profile.school, class_level=class_level)
+        .select_related("supervisor")
+        .order_by(Lower("full_name"))
+    )
+    assessments = (
+        ProjectAssessment.objects.filter(student__in=students, scheme=scheme, year=year, term=term)
+        .prefetch_related("scores")
+    )
+    by_student = {a.student_id: a for a in assessments}
+    checklist = resolve_checklist(profile.school_id, year=year, term=term, class_level=class_level)
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = competency.name[:31]
+    ws.append(
+        [
+            "Student Name",
+            "Supervisor",
+            "Student No",
+            "Stream",
+            f"{competency.name} (%)",
+            "Submitted",
+        ]
+    )
+
+    for s in students:
+        a = by_student.get(s.id)
+        score_map = build_display_score_map(
+            a,
+            checklist=checklist,
+            student_id=s.id,
+            year=year,
+            term=term,
+        )
+        submitted = ""
+        if a:
+            cs = CompetencyScore.objects.filter(assessment=a, competency=competency).first()
+            if cs and cs.submitted_at:
+                submitted = cs.submitted_at.strftime("%Y-%m-%d %H:%M")
+        row_score = score_map.get(competency.id)
+        ws.append(
+            [
+                s.full_name,
+                s.supervisor.get_full_name() or s.supervisor.username if s.supervisor_id else "",
+                s.student_no,
+                s.stream,
+                float(row_score) if row_score is not None and row_score != "" else "",
+                submitted,
+            ]
+        )
+
+    out = io.BytesIO()
+    wb.save(out)
+    out.seek(0)
+
+    safe_comp = re.sub(r"[^\w]+", "_", competency.name).strip("_")[:40]
+    filename = (
+        f"{profile.school.name}_{class_level}_{safe_comp}_{year}_T{term}.xlsx".replace(" ", "_")
+    )
+    resp = HttpResponse(
+        out.getvalue(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
     resp["Content-Disposition"] = f'attachment; filename="{filename}"'
     return resp
 
@@ -3115,6 +3284,36 @@ def registration_pending(request):
     return render(request, "auth/registration_pending.html", {"school": profile.school})
 
 
+def maintenance_notice(request):
+    from .maintenance_utils import is_maintenance_mode, maintenance_message
+
+    if not is_maintenance_mode():
+        return redirect("home")
+    return render(
+        request,
+        "auth/maintenance.html",
+        {"maintenance_message": maintenance_message()},
+    )
+
+
+@login_required
+def registration_deactivated(request):
+    profile = _require_profile(request)
+    if _is_superadmin(profile) or not profile.school_id:
+        return redirect("home")
+    if profile.school.status != SchoolRegistrationStatus.DEACTIVATED:
+        return redirect("home")
+    return render(
+        request,
+        "auth/registration_deactivated.html",
+        {
+            "school": profile.school,
+            "permanent_deletion_at": permanent_deletion_at(profile.school),
+            "grace_days": SCHOOL_DELETION_GRACE_DAYS,
+        },
+    )
+
+
 @login_required
 def registration_rejected(request):
     profile = _require_profile(request)
@@ -3131,27 +3330,119 @@ def superadmin_dashboard(request):
     if not _is_superadmin(profile):
         raise Http404()
 
+    purged = purge_expired_deactivated_schools()
+    if purged:
+        messages.info(
+            request,
+            f"Permanently deleted {len(purged)} school(s) that completed the "
+            f"{SCHOOL_DELETION_GRACE_DAYS}-day deactivation period.",
+        )
+
     status_filter = request.GET.get("status", "pending")
     schools = School.objects.select_related("overall_supervisor").order_by("-created_at")
     if status_filter in {s.value for s in SchoolRegistrationStatus}:
         schools = schools.filter(status=status_filter)
 
+    school_rows = [
+        (
+            school,
+            permanent_deletion_at(school)
+            if school.status == SchoolRegistrationStatus.DEACTIVATED
+            else None,
+        )
+        for school in schools
+    ]
+
     counts = {
         "pending": School.objects.filter(status=SchoolRegistrationStatus.PENDING).count(),
         "approved": School.objects.filter(status=SchoolRegistrationStatus.APPROVED).count(),
         "rejected": School.objects.filter(status=SchoolRegistrationStatus.REJECTED).count(),
+        "deactivated": School.objects.filter(status=SchoolRegistrationStatus.DEACTIVATED).count(),
     }
+
+    from .maintenance_utils import (
+        is_maintenance_mode,
+        maintenance_forced_by_env,
+        maintenance_message,
+    )
+    from .models import PlatformSettings
+
+    platform_settings = PlatformSettings.get()
 
     return render(
         request,
         "superadmin/dashboard.html",
         {
-            "schools": schools,
+            "school_rows": school_rows,
             "status_filter": status_filter,
             "counts": counts,
             "SchoolRegistrationStatus": SchoolRegistrationStatus,
+            "grace_days": SCHOOL_DELETION_GRACE_DAYS,
+            "maintenance_active": is_maintenance_mode(),
+            "maintenance_db_enabled": platform_settings.maintenance_enabled,
+            "maintenance_forced_by_env": maintenance_forced_by_env(),
+            "maintenance_message_text": maintenance_message(),
+            "maintenance_message_draft": platform_settings.maintenance_message,
         },
     )
+
+
+@login_required
+def superadmin_toggle_maintenance(request):
+    profile = _require_profile(request)
+    if not _is_superadmin(profile):
+        raise Http404()
+    if request.method != "POST":
+        raise Http404()
+
+    from .maintenance_utils import maintenance_forced_by_env
+    from .models import PlatformSettings
+
+    platform_settings = PlatformSettings.get()
+    action = (request.POST.get("action") or "").strip().lower()
+    message = (request.POST.get("maintenance_message") or "").strip()
+
+    if action == "enable":
+        platform_settings.maintenance_enabled = True
+        if message:
+            platform_settings.maintenance_message = message
+        platform_settings.maintenance_updated_at = timezone.now()
+        platform_settings.maintenance_updated_by = request.user
+        platform_settings.save(
+            update_fields=[
+                "maintenance_enabled",
+                "maintenance_message",
+                "maintenance_updated_at",
+                "maintenance_updated_by",
+            ]
+        )
+        messages.success(
+            request,
+            "Maintenance mode is ON. Only platform superadmins can sign in until you turn it off.",
+        )
+    elif action == "disable":
+        platform_settings.maintenance_enabled = False
+        platform_settings.maintenance_updated_at = timezone.now()
+        platform_settings.maintenance_updated_by = request.user
+        platform_settings.save(
+            update_fields=[
+                "maintenance_enabled",
+                "maintenance_updated_at",
+                "maintenance_updated_by",
+            ]
+        )
+        if maintenance_forced_by_env():
+            messages.warning(
+                request,
+                "Dashboard maintenance is off, but MAINTENANCE_MODE is still set in server "
+                "environment variables — users remain locked out until that is cleared.",
+            )
+        else:
+            messages.success(request, "Maintenance mode is OFF. Users can sign in again.")
+    else:
+        messages.error(request, "Unknown maintenance action.")
+
+    return redirect("superadmin_dashboard")
 
 
 @login_required
@@ -3173,6 +3464,8 @@ def superadmin_school_detail(request, school_id: int):
             "reject_form": reject_form,
             "students_count": students_count,
             "supervisors_count": supervisors_count,
+            "permanent_deletion_at": permanent_deletion_at(school),
+            "grace_days": SCHOOL_DELETION_GRACE_DAYS,
         },
     )
 
@@ -3220,15 +3513,61 @@ def superadmin_delete_school(request, school_id: int):
     profile = _require_profile(request)
     if not _is_superadmin(profile):
         raise Http404()
-    if request.method != "POST":
-        return redirect("superadmin_school_detail", school_id=school_id)
 
     school = get_object_or_404(School, pk=school_id)
-    name = school.name
-    delete_school_completely(school)
-    messages.success(
+
+    if request.method == "POST":
+        form = SchoolDeleteConfirmForm(request.POST, expected_name=school.name)
+        if form.is_valid():
+            name = school.name
+            deactivate_school(school=school, by_user=request.user)
+            purge_date = permanent_deletion_at(school)
+            messages.success(
+                request,
+                f'"{name}" has been deactivated. Users cannot sign in. '
+                f"Permanent deletion is scheduled for {purge_date.strftime('%b %d, %Y') if purge_date else '30 days from now'}. "
+                "You can reactivate the school before that date.",
+            )
+            return redirect("superadmin_school_detail", school_id=school_id)
+    else:
+        form = SchoolDeleteConfirmForm(expected_name=school.name)
+
+    return render(
         request,
-        f'"{name}" and all related data have been permanently deleted. '
-        "The school may register again and await superadmin approval.",
+        "superadmin/delete_school_confirm.html",
+        {
+            "school": school,
+            "form": form,
+            "grace_days": SCHOOL_DELETION_GRACE_DAYS,
+        },
     )
-    return redirect("superadmin_dashboard")
+
+
+@login_required
+def superadmin_reactivate_school(request, school_id: int):
+    profile = _require_profile(request)
+    if not _is_superadmin(profile):
+        raise Http404()
+
+    school = get_object_or_404(School, pk=school_id)
+    if school.status != SchoolRegistrationStatus.DEACTIVATED:
+        messages.warning(request, "Only deactivated schools can be reactivated.")
+        return redirect("superadmin_school_detail", school_id=school_id)
+
+    if request.method == "POST":
+        restore_deactivated_school(school=school)
+        messages.success(
+            request,
+            f'"{school.name}" has been reactivated. Users can sign in and use the system again.',
+        )
+        return redirect(f"{reverse('superadmin_dashboard')}?status=approved")
+
+    return render(
+        request,
+        "superadmin/reactivate_school_confirm.html",
+        {
+            "school": school,
+            "permanent_deletion_at": permanent_deletion_at(school),
+            "grace_days": SCHOOL_DELETION_GRACE_DAYS,
+        },
+    )

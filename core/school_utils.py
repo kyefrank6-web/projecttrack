@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from django.contrib.auth import get_user_model
 from django.db import transaction
+from django.utils import timezone
 
 from .models import ProjectEvidence, Role, School, SchoolRegistrationStatus, Student, UserProfile
 
 User = get_user_model()
+
+SCHOOL_DELETION_GRACE_DAYS = 30
 
 
 def school_name_blocks_registration(name: str) -> bool:
@@ -31,6 +34,7 @@ def username_blocks_registration(username: str) -> bool:
         if profile.school.status in (
             SchoolRegistrationStatus.PENDING,
             SchoolRegistrationStatus.APPROVED,
+            SchoolRegistrationStatus.DEACTIVATED,
         ):
             return True
 
@@ -39,8 +43,75 @@ def username_blocks_registration(username: str) -> bool:
         status__in=(
             SchoolRegistrationStatus.PENDING,
             SchoolRegistrationStatus.APPROVED,
+            SchoolRegistrationStatus.DEACTIVATED,
         ),
     ).exists()
+
+
+def permanent_deletion_at(school: School):
+    if not school.deactivated_at:
+        return None
+    from datetime import timedelta
+
+    return school.deactivated_at + timedelta(days=SCHOOL_DELETION_GRACE_DAYS)
+
+
+@transaction.atomic
+def deactivate_school(*, school: School, by_user) -> None:
+    """Mark school inactive; permanent deletion happens after the grace period."""
+    if school.status == SchoolRegistrationStatus.DEACTIVATED:
+        return
+    school.deactivated_from_status = school.status
+    school.status = SchoolRegistrationStatus.DEACTIVATED
+    school.deactivated_at = timezone.now()
+    school.reviewed_at = timezone.now()
+    school.reviewed_by = by_user
+    school.save(
+        update_fields=[
+            "deactivated_from_status",
+            "status",
+            "deactivated_at",
+            "reviewed_at",
+            "reviewed_by",
+        ]
+    )
+
+
+@transaction.atomic
+def restore_deactivated_school(*, school: School) -> None:
+    if school.status != SchoolRegistrationStatus.DEACTIVATED:
+        raise ValueError("School is not deactivated.")
+    restore_status = school.deactivated_from_status or SchoolRegistrationStatus.APPROVED
+    if restore_status not in {
+        SchoolRegistrationStatus.PENDING,
+        SchoolRegistrationStatus.APPROVED,
+        SchoolRegistrationStatus.REJECTED,
+    }:
+        restore_status = SchoolRegistrationStatus.APPROVED
+    school.status = restore_status
+    school.deactivated_at = None
+    school.deactivated_from_status = ""
+    school.save(update_fields=["status", "deactivated_at", "deactivated_from_status"])
+
+
+@transaction.atomic
+def purge_expired_deactivated_schools() -> list[str]:
+    """Permanently delete schools that have been deactivated for at least the grace period."""
+    from datetime import timedelta
+
+    cutoff = timezone.now() - timedelta(days=SCHOOL_DELETION_GRACE_DAYS)
+    removed: list[str] = []
+    expired = list(
+        School.objects.filter(
+            status=SchoolRegistrationStatus.DEACTIVATED,
+            deactivated_at__isnull=False,
+            deactivated_at__lte=cutoff,
+        )
+    )
+    for school in expired:
+        removed.append(school.name)
+        delete_school_completely(school)
+    return removed
 
 
 @transaction.atomic
@@ -114,6 +185,33 @@ def delete_all_students_from_school(*, school: School) -> int:
 
     Student.objects.filter(school=school).delete()
     return len(student_ids)
+
+
+def ensure_supervisor_membership(
+    *,
+    school: School,
+    user: User,
+    password_hash: str,
+    must_change_password: bool = True,
+) -> tuple[UserProfile, bool]:
+    """
+    Add or refresh a regular supervisor membership at this school.
+    Works even when the user is already the overall supervisor here (second role).
+    """
+    membership, created = UserProfile.objects.get_or_create(
+        user=user,
+        school=school,
+        role=Role.SUPERVISOR,
+        defaults={
+            "school_password": password_hash,
+            "must_change_password": must_change_password,
+        },
+    )
+    if not created:
+        membership.school_password = password_hash
+        membership.must_change_password = must_change_password
+        membership.save(update_fields=["school_password", "must_change_password"])
+    return membership, created
 
 
 @transaction.atomic

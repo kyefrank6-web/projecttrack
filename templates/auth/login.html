@@ -85,6 +85,13 @@
               Platform administrators sign in the same way (username + password only).
             </p>
 
+            {% if maintenance_mode %}
+              <div class="alert alert-warning small">
+                {{ maintenance_message }}
+                Only platform administrators can sign in while updates are in progress.
+              </div>
+            {% endif %}
+
             {% if form.errors %}
               <div class="alert alert-danger">Invalid username or password.</div>
             {% endif %}

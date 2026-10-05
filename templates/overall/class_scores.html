@@ -51,10 +51,25 @@
               class="dropdown-item"
               href="{% url 'export_class_scores' class_level %}?year={{ year }}&term={{ term }}&scheme_id={{ scheme.id }}"
             >
-              <span>Score spreadsheet</span>
+              <span>All competencies (full sheet)</span>
               <span class="export-format export-format-xlsx">Excel</span>
             </a>
           </li>
+          {% if competencies %}
+            <li><h6 class="dropdown-header text-success">UNEB — one competency per file</h6></li>
+            {% for c in competencies %}
+              <li>
+                <a
+                  class="dropdown-item"
+                  href="{% url 'export_class_competency_scores' class_level %}?year={{ year }}&term={{ term }}&scheme_id={{ scheme.id }}&competency_id={{ c.id }}"
+                >
+                  <span>{{ c.name }}</span>
+                  <span class="export-format export-format-xlsx">Phase</span>
+                </a>
+              </li>
+            {% endfor %}
+          {% endif %}
+          <li><hr class="dropdown-divider" /></li>
           <li>
             <a
               class="dropdown-item"
@@ -162,7 +177,9 @@
   <div class="card border-0 shadow-sm">
     <div class="card-body">
       <p class="text-muted small mb-3">
-        <strong>—</strong> means this competency has not been scored yet (assess one competency at a time via the observation checklist).
+        <strong>UNEB phased results:</strong> supervisors submit <strong>one competency at a time</strong> on the score/checklist page.
+        <strong>—</strong> means that competency is not submitted yet. Use <strong>Download &amp; export → UNEB — one competency per file</strong>
+        to download each phase for UNEB.
       </p>
       <div class="table-responsive">
         <table class="table table-hover align-middle mb-0">

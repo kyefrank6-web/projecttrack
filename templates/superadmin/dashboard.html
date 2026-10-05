@@ -10,6 +10,54 @@
 {% endblock %}
 
 {% block content %}
+  <div class="card mb-4 border-{% if maintenance_active %}warning{% else %}secondary{% endif %}">
+    <div class="card-body d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
+      <div>
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <h2 class="h6 mb-0 fw-semibold">System maintenance</h2>
+          {% if maintenance_active %}
+            <span class="badge bg-warning text-dark">Active</span>
+          {% else %}
+            <span class="badge bg-success">Off</span>
+          {% endif %}
+        </div>
+        <p class="text-muted small mb-0">
+          When maintenance is on, school staff and supervisors cannot sign in. Platform superadmins can still access this dashboard.
+        </p>
+        {% if maintenance_forced_by_env %}
+          <p class="text-warning small mb-0 mt-2">
+            Server environment <code>MAINTENANCE_MODE</code> is also enabled — users stay locked out until that is cleared on the host.
+          </p>
+        {% endif %}
+      </div>
+      <div class="d-flex flex-column flex-sm-row gap-2 align-items-stretch">
+        <form method="post" action="{% url 'superadmin_toggle_maintenance' %}" class="d-flex flex-column gap-2">
+          {% csrf_token %}
+          <textarea
+            class="form-control form-control-sm"
+            name="maintenance_message"
+            rows="2"
+            placeholder="Optional message for users (e.g. back by 3pm)"
+          >{{ maintenance_message_draft }}</textarea>
+          {% if maintenance_db_enabled %}
+            <button class="btn btn-success btn-sm" type="submit" name="action" value="disable">
+              Turn maintenance off
+            </button>
+          {% elif not maintenance_forced_by_env %}
+            <button class="btn btn-warning btn-sm" type="submit" name="action" value="enable">
+              Turn maintenance on
+            </button>
+          {% endif %}
+        </form>
+      </div>
+    </div>
+    {% if maintenance_active %}
+      <div class="card-footer py-2 small text-muted">
+        Users see: “{{ maintenance_message_text|truncatechars:120 }}”
+      </div>
+    {% endif %}
+  </div>
+
   <ul class="nav nav-pills mb-3 gap-2">
     <li class="nav-item">
       <a
@@ -35,7 +83,22 @@
         Rejected ({{ counts.rejected }})
       </a>
     </li>
+    <li class="nav-item">
+      <a
+        class="nav-link {% if status_filter == 'deactivated' %}active{% endif %}"
+        href="?status=deactivated"
+      >
+        Deactivated ({{ counts.deactivated }})
+      </a>
+    </li>
   </ul>
+
+  {% if status_filter == 'deactivated' %}
+    <div class="alert alert-info small">
+      Deactivated schools can be <strong>reactivated</strong> at any time before the permanent deletion date.
+      Use the green <strong>Reactivate</strong> button, or open <strong>Manage</strong> for full details.
+    </div>
+  {% endif %}
 
   <div class="card">
     <div class="table-responsive">
@@ -45,12 +108,16 @@
             <th>School</th>
             <th>Overall supervisor</th>
             <th>Status</th>
-            <th>Registered</th>
-            <th></th>
+            {% if status_filter == 'deactivated' %}
+              <th>Permanent deletion</th>
+            {% else %}
+              <th>Registered</th>
+            {% endif %}
+            <th class="text-end">Actions</th>
           </tr>
         </thead>
         <tbody>
-          {% for school in schools %}
+          {% for school, permanent_deletion_at in school_rows %}
             <tr>
               <td class="fw-semibold">{{ school.name }}</td>
               <td>
@@ -61,13 +128,30 @@
                 {% endif %}
               </td>
               <td>
-                <span class="badge text-bg-{% if school.status == 'approved' %}success{% elif school.status == 'rejected' %}danger{% else %}warning{% endif %}">
+                <span class="badge text-bg-{% if school.status == 'approved' %}success{% elif school.status == 'rejected' %}danger{% elif school.status == 'deactivated' %}secondary{% else %}warning{% endif %}">
                   {{ school.get_status_display }}
                 </span>
               </td>
-              <td class="small text-muted">{{ school.created_at|date:"M j, Y H:i" }}</td>
-              <td>
-                <a class="btn btn-sm btn-outline-primary" href="{% url 'superadmin_school_detail' school.id %}">Manage</a>
+              <td class="small text-muted">
+                {% if status_filter == 'deactivated' %}
+                  {% if permanent_deletion_at %}
+                    {{ permanent_deletion_at|date:"M j, Y" }}
+                  {% else %}
+                    —
+                  {% endif %}
+                {% else %}
+                  {{ school.created_at|date:"M j, Y H:i" }}
+                {% endif %}
+              </td>
+              <td class="text-end">
+                <div class="d-inline-flex flex-wrap gap-1 justify-content-end">
+                  {% if school.status == 'deactivated' %}
+                    <a class="btn btn-sm btn-success" href="{% url 'superadmin_reactivate_school' school.id %}">
+                      Reactivate
+                    </a>
+                  {% endif %}
+                  <a class="btn btn-sm btn-outline-primary" href="{% url 'superadmin_school_detail' school.id %}">Manage</a>
+                </div>
               </td>
             </tr>
           {% empty %}

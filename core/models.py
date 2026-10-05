@@ -14,6 +14,7 @@ class SchoolRegistrationStatus(models.TextChoices):
     PENDING = "pending", "Pending approval"
     APPROVED = "approved", "Approved"
     REJECTED = "rejected", "Rejected"
+    DEACTIVATED = "deactivated", "Deactivated (pending deletion)"
 
 
 class SecondaryClassLevel(models.TextChoices):
@@ -68,6 +69,17 @@ class School(models.Model):
         blank=True,
         related_name="reviewed_schools",
     )
+    deactivated_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When set, the school is inactive until permanently deleted after the grace period.",
+    )
+    deactivated_from_status = models.CharField(
+        max_length=20,
+        blank=True,
+        default="",
+        help_text="Registration status to restore if deactivation is cancelled.",
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -77,8 +89,9 @@ class School(models.Model):
 
 class UserProfile(models.Model):
     """
-    One row per user per school. Same supervisor username can belong to many schools,
-    each with its own password (school_password).
+    One row per user, school, and role. The same person may be overall supervisor and
+    regular supervisor at the same school (two memberships). Supervisors can also
+    belong to many schools, each with its own password (school_password).
     """
 
     user = models.ForeignKey(
@@ -105,8 +118,8 @@ class UserProfile(models.Model):
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=["user", "school"],
-                name="unique_user_school_membership",
+                fields=["user", "school", "role"],
+                name="unique_user_school_role_membership",
             ),
         ]
 
@@ -221,6 +234,11 @@ class CompetencyScore(models.Model):
     assessment = models.ForeignKey(ProjectAssessment, on_delete=models.CASCADE, related_name="scores")
     competency = models.ForeignKey(Competency, on_delete=models.PROTECT, related_name="scores")
     score = models.DecimalField(max_digits=5, decimal_places=2)
+    submitted_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When this competency result was submitted (UNEB phase).",
+    )
 
     class Meta:
         unique_together = [("assessment", "competency")]
@@ -465,3 +483,34 @@ class ProjectEvidence(models.Model):
 
     def __str__(self) -> str:
         return f"{self.get_category_display()} — {self.student}"
+
+
+class PlatformSettings(models.Model):
+    """Singleton platform flags toggled from the superadmin dashboard."""
+
+    maintenance_enabled = models.BooleanField(
+        default=False,
+        help_text="When enabled, only platform superadmins can sign in.",
+    )
+    maintenance_message = models.TextField(
+        blank=True,
+        default="",
+        help_text="Optional message shown to users during maintenance.",
+    )
+    maintenance_updated_at = models.DateTimeField(null=True, blank=True)
+    maintenance_updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="maintenance_updates",
+    )
+
+    class Meta:
+        verbose_name = "Platform settings"
+        verbose_name_plural = "Platform settings"
+
+    @classmethod
+    def get(cls) -> PlatformSettings:
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj

@@ -5,6 +5,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
 
 from django.db import transaction
+from django.utils import timezone
 
 from .models import (
     Competency,
@@ -384,6 +385,10 @@ def get_submitted_competency_ids(
     ).first()
     if not assessment:
         return set()
+    return submitted_competency_ids_for_assessment(assessment)
+
+
+def submitted_competency_ids_for_assessment(assessment: ProjectAssessment) -> set[int]:
     return set(
         CompetencyScore.objects.filter(assessment=assessment).values_list(
             "competency_id", flat=True
@@ -481,10 +486,14 @@ def save_competency_observation_ratings_and_score(
         if competency_id in existing_scores:
             obj = existing_scores[competency_id]
             obj.score = pct
-            obj.save(update_fields=["score"])
+            obj.submitted_at = timezone.now()
+            obj.save(update_fields=["score", "submitted_at"])
         else:
             CompetencyScore.objects.create(
-                assessment=assessment, competency_id=competency_id, score=pct
+                assessment=assessment,
+                competency_id=competency_id,
+                score=pct,
+                submitted_at=timezone.now(),
             )
         return pct, comp_name
 

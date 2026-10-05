@@ -8,7 +8,7 @@
       <h1 class="h4 mb-1">{{ school.name }}</h1>
       <div class="text-muted">
         Status:
-        <span class="badge text-bg-{% if school.status == 'approved' %}success{% elif school.status == 'rejected' %}danger{% else %}warning{% endif %}">
+        <span class="badge text-bg-{% if school.status == 'approved' %}success{% elif school.status == 'rejected' %}danger{% elif school.status == 'deactivated' %}secondary{% else %}warning{% endif %}">
           {{ school.get_status_display }}
         </span>
       </div>
@@ -39,6 +39,14 @@
             <dd class="col-sm-8">{{ students_count }}</dd>
             <dt class="col-sm-4">Registered</dt>
             <dd class="col-sm-8">{{ school.created_at|date:"M j, Y H:i" }}</dd>
+            {% if school.deactivated_at %}
+              <dt class="col-sm-4">Deactivated</dt>
+              <dd class="col-sm-8">{{ school.deactivated_at|date:"M j, Y H:i" }}</dd>
+            {% endif %}
+            {% if permanent_deletion_at %}
+              <dt class="col-sm-4">Permanent deletion</dt>
+              <dd class="col-sm-8">{{ permanent_deletion_at|date:"M j, Y H:i" }} (after {{ grace_days }} days)</dd>
+            {% endif %}
             {% if school.reviewed_at %}
               <dt class="col-sm-4">Last reviewed</dt>
               <dd class="col-sm-8">{{ school.reviewed_at|date:"M j, Y H:i" }}</dd>
@@ -51,45 +59,59 @@
         </div>
       </div>
 
-      {% if school.status != 'approved' %}
+      {% if school.status == 'deactivated' %}
         <div class="card mb-3 border-success">
           <div class="card-body">
-            <h2 class="h6 text-success">Approve school</h2>
-            <p class="small text-muted">The overall supervisor and their team can use the system after approval.</p>
-            <form method="post" action="{% url 'superadmin_approve_school' school.id %}">
-              {% csrf_token %}
-              <button class="btn btn-success" type="submit">Approve registration</button>
-            </form>
+            <h2 class="h6 text-success">Reactivate school</h2>
+            <p class="small text-muted mb-3">
+              Bring this school back online before permanent deletion. Users will be able to sign in again
+              with their existing accounts; no data is lost.
+            </p>
+            <a class="btn btn-success" href="{% url 'superadmin_reactivate_school' school.id %}">
+              Reactivate school
+            </a>
           </div>
         </div>
-      {% endif %}
+      {% else %}
+        {% if school.status != 'approved' %}
+          <div class="card mb-3 border-success">
+            <div class="card-body">
+              <h2 class="h6 text-success">Approve school</h2>
+              <p class="small text-muted">The overall supervisor and their team can use the system after approval.</p>
+              <form method="post" action="{% url 'superadmin_approve_school' school.id %}">
+                {% csrf_token %}
+                <button class="btn btn-success" type="submit">Approve registration</button>
+              </form>
+            </div>
+          </div>
+        {% endif %}
 
-      {% if school.status != 'rejected' %}
-        <div class="card mb-3 border-warning">
+        {% if school.status != 'rejected' %}
+          <div class="card mb-3 border-warning">
+            <div class="card-body">
+              <h2 class="h6">Reject registration</h2>
+              <form method="post" action="{% url 'superadmin_reject_school' school.id %}" class="vstack gap-2">
+                {% csrf_token %}
+                {{ reject_form.rejection_reason }}
+                <button class="btn btn-warning" type="submit">Reject registration</button>
+              </form>
+            </div>
+          </div>
+        {% endif %}
+
+        <div class="card border-danger">
           <div class="card-body">
-            <h2 class="h6">Reject registration</h2>
-            <form method="post" action="{% url 'superadmin_reject_school' school.id %}" class="vstack gap-2">
-              {% csrf_token %}
-              {{ reject_form.rejection_reason }}
-              <button class="btn btn-warning" type="submit">Reject registration</button>
-            </form>
+            <h2 class="h6 text-danger">Deactivate school</h2>
+            <p class="small text-muted mb-3">
+              Disables logins immediately. After {{ grace_days }} days the school and all data are permanently deleted
+              unless you reactivate it first.
+            </p>
+            <a class="btn btn-danger" href="{% url 'superadmin_delete_school' school.id %}">
+              Deactivate school…
+            </a>
           </div>
         </div>
       {% endif %}
-
-      <div class="card border-danger">
-        <div class="card-body">
-          <h2 class="h6 text-danger">Delete school permanently</h2>
-          <p class="small text-muted mb-3">
-            Removes the school, all users, students, scores, evidence photos, and logo. This cannot be undone.
-            The school can register again afterward and must be approved before use.
-          </p>
-          <form method="post" action="{% url 'superadmin_delete_school' school.id %}" onsubmit="return confirm('Delete {{ school.name }} and ALL related data permanently?');">
-            {% csrf_token %}
-            <button class="btn btn-danger" type="submit">Delete school</button>
-          </form>
-        </div>
-      </div>
     </div>
   </div>
 {% endblock %}

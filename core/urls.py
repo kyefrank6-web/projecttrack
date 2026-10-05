@@ -5,13 +5,20 @@ from . import views
 
 urlpatterns = [
     path("", views.home, name="home"),
+    path("maintenance/", views.maintenance_notice, name="maintenance"),
     path("register/", views.register_school, name="register_school"),
     path("account/settings/", views.account_settings, name="account_settings"),
     path("account/password-change/", views.school_password_change, name="password_change"),
     path("account/password-change/done/", views.school_password_change_done, name="password_change_done"),
     path("registration/pending/", views.registration_pending, name="registration_pending"),
     path("registration/rejected/", views.registration_rejected, name="registration_rejected"),
+    path("registration/deactivated/", views.registration_deactivated, name="registration_deactivated"),
     path("superadmin/", views.superadmin_dashboard, name="superadmin_dashboard"),
+    path(
+        "superadmin/maintenance/",
+        views.superadmin_toggle_maintenance,
+        name="superadmin_toggle_maintenance",
+    ),
     path("superadmin/school/<int:school_id>/", views.superadmin_school_detail, name="superadmin_school_detail"),
     path(
         "superadmin/school/<int:school_id>/approve/",
@@ -27,6 +34,11 @@ urlpatterns = [
         "superadmin/school/<int:school_id>/delete/",
         views.superadmin_delete_school,
         name="superadmin_delete_school",
+    ),
+    path(
+        "superadmin/school/<int:school_id>/reactivate/",
+        views.superadmin_reactivate_school,
+        name="superadmin_reactivate_school",
     ),
     path("login/", views.LoginView.as_view(), name="login"),
     path("logout/", views.LogoutView.as_view(), name="logout"),
@@ -138,6 +150,11 @@ urlpatterns = [
     path("supervisor/evidence/", views.supervisor_evidence_index, name="supervisor_evidence_index"),
     path("overall/class/<str:class_level>/", views.class_scores, name="class_scores"),
     path("overall/class/<str:class_level>/export/", views.export_class_scores, name="export_class_scores"),
+    path(
+        "overall/class/<str:class_level>/export-competency/",
+        views.export_class_competency_scores,
+        name="export_class_competency_scores",
+    ),
     path(
         "overall/class/<str:class_level>/export-with-evidence/",
         views.export_class_with_evidence,

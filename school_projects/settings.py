@@ -49,6 +49,20 @@ _extra_csrf = os.environ.get("CSRF_TRUSTED_ORIGINS", "")
 if _extra_csrf:
     CSRF_TRUSTED_ORIGINS.extend(o.strip() for o in _extra_csrf.split(",") if o.strip())
 
+_primary_domain = os.environ.get("PRIMARY_DOMAIN", "").strip().lower()
+if _primary_domain:
+    _domain_hosts = {_primary_domain}
+    if _primary_domain.startswith("www."):
+        _domain_hosts.add(_primary_domain[4:])
+    else:
+        _domain_hosts.add(f"www.{_primary_domain}")
+    for host in _domain_hosts:
+        if host and host not in ALLOWED_HOSTS:
+            ALLOWED_HOSTS.append(host)
+        origin = f"https://{host}"
+        if origin not in CSRF_TRUSTED_ORIGINS:
+            CSRF_TRUSTED_ORIGINS.append(origin)
+
 _ngrok_origin = os.environ.get("NGROK_ORIGIN", "").strip()
 if _ngrok_origin:
     CSRF_TRUSTED_ORIGINS.append(_ngrok_origin)
@@ -68,6 +82,13 @@ if _render_external:
 LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "home"
 LOGOUT_REDIRECT_URL = "home"
+
+# When True, only platform superadmins can sign in; other users are signed out.
+MAINTENANCE_MODE = _env_bool("MAINTENANCE_MODE", default=False)
+MAINTENANCE_MESSAGE = os.environ.get(
+    "MAINTENANCE_MESSAGE",
+    "The system is temporarily unavailable while updates are applied. Please try again later.",
+)
 
 
 # Application definition
@@ -94,13 +115,14 @@ MIDDLEWARE = [
     "core.middleware.ActiveMembershipMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "core.middleware.MaintenanceMiddleware",
     "core.middleware.SchoolApprovalMiddleware",
     "core.middleware.MustChangePasswordMiddleware",
 ]
 
 AUTHENTICATION_BACKENDS = [
     "core.auth_backend.SchoolScopedBackend",
-    "django.contrib.auth.backends.ModelBackend",
+    "core.auth_backend.ModelBackend",
 ]
 
 ROOT_URLCONF = "school_projects.urls"
