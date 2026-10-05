@@ -49,21 +49,33 @@ _extra_csrf = os.environ.get("CSRF_TRUSTED_ORIGINS", "")
 if _extra_csrf:
     CSRF_TRUSTED_ORIGINS.extend(o.strip() for o in _extra_csrf.split(",") if o.strip())
 
-_primary_domain = os.environ.get("PRIMARY_DOMAIN", "").strip().lower()
-if not _primary_domain and _env_bool("RENDER", default=bool(os.environ.get("RENDER_EXTERNAL_HOSTNAME"))):
-    _primary_domain = "projecttrack-ug.ac.ug"
-if _primary_domain:
-    _domain_hosts = {_primary_domain}
-    if _primary_domain.startswith("www."):
-        _domain_hosts.add(_primary_domain[4:])
+_PRODUCTION_DOMAIN_DEFAULT = "projecttrack-ug.ac.ug"
+_on_render = _env_bool("RENDER") or bool(os.environ.get("RENDER_EXTERNAL_HOSTNAME"))
+_on_production_db = bool(os.environ.get("DATABASE_URL"))
+
+
+def _register_site_hosts(domain: str) -> None:
+    domain = (domain or "").strip().lower()
+    if not domain:
+        return
+    hosts = {domain}
+    if domain.startswith("www."):
+        hosts.add(domain[4:])
     else:
-        _domain_hosts.add(f"www.{_primary_domain}")
-    for host in _domain_hosts:
-        if host and host not in ALLOWED_HOSTS:
+        hosts.add(f"www.{domain}")
+    for host in hosts:
+        if host not in ALLOWED_HOSTS:
             ALLOWED_HOSTS.append(host)
-        origin = f"https://{host}"
-        if origin not in CSRF_TRUSTED_ORIGINS:
-            CSRF_TRUSTED_ORIGINS.append(origin)
+        for scheme in ("https", "http"):
+            origin = f"{scheme}://{host}"
+            if origin not in CSRF_TRUSTED_ORIGINS:
+                CSRF_TRUSTED_ORIGINS.append(origin)
+
+
+_primary_domain = os.environ.get("PRIMARY_DOMAIN", "").strip().lower()
+if not _primary_domain and (_on_render or (_on_production_db and not DEBUG)):
+    _primary_domain = _PRODUCTION_DOMAIN_DEFAULT
+_register_site_hosts(_primary_domain)
 
 _ngrok_origin = os.environ.get("NGROK_ORIGIN", "").strip()
 if _ngrok_origin:
@@ -235,6 +247,13 @@ EMAIL_USE_TLS = os.environ.get("DJANGO_EMAIL_USE_TLS", "true").lower() in ("1", 
 # Production security (enabled when DEBUG is false)
 if not DEBUG:
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    USE_X_FORWARDED_HOST = True
     SECURE_SSL_REDIRECT = _env_bool("SECURE_SSL_REDIRECT", default=True)
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
+    if _primary_domain:
+        _cookie_base = (
+            _primary_domain[4:] if _primary_domain.startswith("www.") else _primary_domain
+        )
+        SESSION_COOKIE_DOMAIN = f".{_cookie_base}"
+        CSRF_COOKIE_DOMAIN = f".{_cookie_base}"

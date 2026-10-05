@@ -13,8 +13,9 @@ services:
       - key: DEBUG
         value: "false"
       - key: DJANGO_ALLOWED_HOSTS
-        value: ".onrender.com"
-      # Custom domain (no https://) — used for ALLOWED_HOSTS + CSRF
+        value: ".onrender.com,projecttrack-ug.ac.ug,www.projecttrack-ug.ac.ug"
+      - key: CSRF_TRUSTED_ORIGINS
+        value: "https://projecttrack-ug.ac.ug,https://www.projecttrack-ug.ac.ug"
       - key: PRIMARY_DOMAIN
         value: projecttrack-ug.ac.ug
       - key: WEB_CONCURRENCY
