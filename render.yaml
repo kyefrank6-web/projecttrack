@@ -14,9 +14,9 @@ services:
         value: "false"
       - key: DJANGO_ALLOWED_HOSTS
         value: ".onrender.com"
-      # Set your custom domain (no https://), e.g. projecttrack.example.com
+      # Custom domain (no https://) — used for ALLOWED_HOSTS + CSRF
       - key: PRIMARY_DOMAIN
-        sync: false
+        value: projecttrack-ug.ac.ug
       - key: WEB_CONCURRENCY
         value: "1"
       - key: SUPERADMIN_USERNAME

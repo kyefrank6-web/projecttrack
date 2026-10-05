@@ -50,6 +50,8 @@ if _extra_csrf:
     CSRF_TRUSTED_ORIGINS.extend(o.strip() for o in _extra_csrf.split(",") if o.strip())
 
 _primary_domain = os.environ.get("PRIMARY_DOMAIN", "").strip().lower()
+if not _primary_domain and _env_bool("RENDER", default=bool(os.environ.get("RENDER_EXTERNAL_HOSTNAME"))):
+    _primary_domain = "projecttrack-ug.ac.ug"
 if _primary_domain:
     _domain_hosts = {_primary_domain}
     if _primary_domain.startswith("www."):

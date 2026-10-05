@@ -71,10 +71,18 @@ python manage.py create_superadmin --username YOUR_USER --password 'YOUR_PASS'
 python manage.py bootstrap_school  # if you use the test-school command locally
 ```
 
+## Cloudflare in front of Render
+
+1. **SSL/TLS → Overview** → set encryption to **Full** (not Flexible).
+2. **DNS** → CNAME `@` and `www` → your `*.onrender.com` hostname.
+3. First deploy: set **Proxy status** to **DNS only** (grey cloud) until Render **Custom Domains** shows **Verified**, then you may enable **Proxied** (orange).
+4. On Render **Environment**, set `PRIMARY_DOMAIN=yourdomain.ac.ug` and redeploy (fixes **400 Bad Request** on login).
+
 ## Troubleshooting
 
 | Issue | Fix |
 |-------|-----|
+| **400 Bad Request** (plain Django page) | Set `PRIMARY_DOMAIN` on Render to your domain, redeploy |
 | **DisallowedHost** | Add host to `PRIMARY_DOMAIN` or `DJANGO_ALLOWED_HOSTS`, redeploy |
 | **CSRF verification failed** | Add `https://yourdomain.com` to `CSRF_TRUSTED_ORIGINS` or set `PRIMARY_DOMAIN` |
 | **502 / timeout on upload** | Free tier is slow; increase Gunicorn timeout or upgrade plan |
