@@ -140,6 +140,40 @@
 {% endblock %}
 
 {% block content %}
+  {% if scheme %}
+    <form method="get" class="card mb-3 border-0 shadow-sm">
+      <div class="card-body py-3">
+        <div class="d-flex flex-wrap gap-2 align-items-end">
+          <div>
+            <label class="form-label small mb-1" for="scores-year">Year</label>
+            <input id="scores-year" class="form-control" type="number" name="year" min="2000" max="2100" value="{{ year }}" />
+          </div>
+          <div>
+            <label class="form-label small mb-1" for="scores-term">Term</label>
+            <select id="scores-term" class="form-select" name="term">
+              <option value="1" {% if term == 1 %}selected{% endif %}>Term 1</option>
+              <option value="2" {% if term == 2 %}selected{% endif %}>Term 2</option>
+              <option value="3" {% if term == 3 %}selected{% endif %}>Term 3</option>
+            </select>
+          </div>
+          <input type="hidden" name="scheme_id" value="{{ scheme.id }}" />
+          {% if search_q %}
+            <input type="hidden" name="q" value="{{ search_q }}" />
+          {% endif %}
+          <button class="btn btn-outline-primary" type="submit">Show marks</button>
+        </div>
+      </div>
+    </form>
+  {% endif %}
+  {% if scheme and not current_term_has_marks and marks_on_other_terms %}
+    <div class="alert alert-warning">
+      Supervisors have already submitted marks for this class in
+      {% for other_term in marks_on_other_terms %}
+        <a href="?year={{ year }}&term={{ other_term }}&scheme_id={{ scheme.id }}{% if search_q %}&q={{ search_q|urlencode }}{% endif %}">Term {{ other_term }}</a>{% if not forloop.last %}, {% endif %}
+      {% endfor %}
+      . Term {{ term }} does not have those marks yet.
+    </div>
+  {% endif %}
   <div class="card mb-3 border-0 shadow-sm">
     <div class="card-body py-3">
       <form method="get" class="d-flex flex-wrap gap-2 align-items-center">

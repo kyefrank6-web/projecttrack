@@ -284,7 +284,7 @@ class UploadFileForm(forms.Form):
 
 
 class ScoreStudentForm(forms.Form):
-    scheme = forms.ModelChoiceField(queryset=AssessmentScheme.objects.filter(active=True))
+    scheme = forms.ModelChoiceField(queryset=AssessmentScheme.objects.all())
     year = forms.IntegerField(min_value=2000, max_value=2100)
     term = forms.ChoiceField(choices=[("1", "Term 1"), ("2", "Term 2"), ("3", "Term 3")])
 

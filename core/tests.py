@@ -1,8 +1,22 @@
+from decimal import Decimal
+
 from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
 
 from .forms import RegisterSchoolForm
-from .models import AcademicPromotionRun, Role, School, SchoolRegistrationStatus, SecondaryClassLevel, Student, UserProfile
+from .models import (
+    AcademicPromotionRun,
+    AssessmentScheme,
+    Competency,
+    CompetencyScore,
+    ProjectAssessment,
+    Role,
+    School,
+    SchoolRegistrationStatus,
+    SecondaryClassLevel,
+    Student,
+    UserProfile,
+)
 from .project_theme_utils import cohort_year_for_class
 from .promotion_utils import PromotionAlreadyRunError, preview_academic_promotion, run_academic_promotion
 from .school_utils import clear_registration_blockers, delete_school_completely, school_name_blocks_registration
@@ -412,3 +426,77 @@ class SchoolDeactivationTests(TestCase):
         removed = purge_expired_deactivated_schools()
         self.assertEqual(removed, ["Grace High"])
         self.assertFalse(School.objects.filter(name="Grace High").exists())
+
+
+class SupervisorMarkStorageTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="marker", password="test")
+        self.school = School.objects.create(name="Mark School", status="approved")
+        self.student = Student.objects.create(
+            school=self.school,
+            full_name="Learner",
+            class_level=SecondaryClassLevel.S3,
+        )
+        self.old_scheme = AssessmentScheme.objects.create(name="Old scheme", active=False)
+        self.sheet_scheme = AssessmentScheme.objects.create(name="Sheet scheme", active=True)
+        self.old_comp = Competency.objects.create(
+            scheme=self.old_scheme, name="Project planning", order=1
+        )
+        self.sheet_comp = Competency.objects.create(
+            scheme=self.sheet_scheme, name="Project planning", order=1
+        )
+
+    def test_term1_marks_move_to_term3_without_overwriting(self):
+        from .observation_utils import move_scores_between_terms
+
+        assessment = ProjectAssessment.objects.create(
+            student=self.student,
+            scheme=self.sheet_scheme,
+            year=2026,
+            term=1,
+            created_by=self.user,
+        )
+        CompetencyScore.objects.create(
+            assessment=assessment, competency=self.sheet_comp, score=Decimal("80.00")
+        )
+        kept = ProjectAssessment.objects.create(
+            student=self.student,
+            scheme=self.old_scheme,
+            year=2026,
+            term=3,
+            created_by=self.user,
+        )
+
+        moved = move_scores_between_terms(year=2026, from_term=1, to_term=3)
+        self.assertEqual(moved, 1)
+        assessment.refresh_from_db()
+        kept.refresh_from_db()
+        self.assertEqual(assessment.term, 3)
+        self.assertEqual(kept.term, 3)
+        self.assertEqual(assessment.scores.get().score, Decimal("80.00"))
+
+    def test_marks_saved_on_another_scheme_show_on_the_score_sheet(self):
+        from .observation_utils import student_display_score_maps
+
+        assessment = ProjectAssessment.objects.create(
+            student=self.student,
+            scheme=self.old_scheme,
+            year=2026,
+            term=3,
+            created_by=self.user,
+        )
+        CompetencyScore.objects.create(
+            assessment=assessment,
+            competency=self.old_comp,
+            score=Decimal("64.50"),
+            submitted_at=self.student.created_at,
+        )
+
+        maps = student_display_score_maps(
+            [self.student],
+            self.sheet_scheme,
+            2026,
+            3,
+            checklist_for=lambda _student: None,
+        )
+        self.assertEqual(maps[self.student.id][self.sheet_comp.id], Decimal("64.50"))

@@ -315,6 +315,114 @@ def latest_assessor_display_name(
     return (u.get_full_name() or u.first_name or u.username or "").strip()
 
 
+def competency_for_score_sheet(competency: Competency, scheme) -> Competency:
+    """Use the score-sheet competency with the same name when the checklist uses another scheme."""
+    if scheme is None or competency.scheme_id == scheme.id:
+        return competency
+    match = Competency.objects.filter(scheme=scheme, name__iexact=competency.name).first()
+    return match or competency
+
+
+def move_scores_between_terms(*, year: int, from_term: int, to_term: int) -> int:
+    """
+    Move saved assessments and observation ticks from one term to another.
+
+    A row is left in place when that learner already has a result for the destination
+    term, so a later submission is never overwritten.
+    """
+    if from_term == to_term:
+        return 0
+    moved = 0
+    for assessment in ProjectAssessment.objects.filter(year=year, term=from_term):
+        taken = ProjectAssessment.objects.filter(
+            student_id=assessment.student_id,
+            scheme_id=assessment.scheme_id,
+            year=year,
+            term=to_term,
+        ).exists()
+        if taken:
+            continue
+        assessment.term = to_term
+        assessment.save(update_fields=["term"])
+        moved += 1
+
+    for rating in StudentObservationRating.objects.filter(year=year, term=from_term):
+        taken = StudentObservationRating.objects.filter(
+            student_id=rating.student_id,
+            criterion_id=rating.criterion_id,
+            year=year,
+            term=to_term,
+        ).exists()
+        if taken:
+            continue
+        rating.term = to_term
+        rating.save(update_fields=["term"])
+        moved += 1
+    return moved
+
+
+def terms_with_marks_for_students(student_ids, year: int) -> set[int]:
+    if not student_ids:
+        return set()
+    from_assessments = ProjectAssessment.objects.filter(
+        student_id__in=student_ids, year=year
+    ).values_list("term", flat=True)
+    from_ratings = StudentObservationRating.objects.filter(
+        student_id__in=student_ids, year=year
+    ).values_list("term", flat=True)
+    return set(from_assessments) | set(from_ratings)
+
+
+def student_display_score_maps(
+    students,
+    scheme,
+    year: int,
+    term: int,
+    *,
+    checklist_for,
+) -> dict[int, dict[int, Decimal]]:
+    """
+    Scores for the sheet scheme. Marks saved against another scheme are included
+    when the competency name matches, so a supervisor submission still appears.
+    """
+    student_list = list(students)
+    if not student_list or scheme is None:
+        return {s.id: {} for s in student_list}
+
+    grouped: dict[int, dict[int, ProjectAssessment]] = defaultdict(dict)
+    assessments = ProjectAssessment.objects.filter(
+        student__in=student_list, year=year, term=term
+    ).prefetch_related("scores__competency")
+    for assessment in assessments:
+        grouped[assessment.student_id][assessment.scheme_id] = assessment
+
+    name_to_id = {
+        c.name.lower(): c.id for c in Competency.objects.filter(scheme=scheme)
+    }
+    out: dict[int, dict[int, Decimal]] = {}
+    for student in student_list:
+        primary = grouped.get(student.id, {}).get(scheme.id)
+        checklist = checklist_for(student)
+        score_map = build_display_score_map(
+            primary,
+            checklist=checklist,
+            student_id=student.id,
+            year=year,
+            term=term,
+        )
+        for other in grouped.get(student.id, {}).values():
+            if primary is not None and other.id == primary.id:
+                continue
+            for saved in other.scores.all():
+                target_id = name_to_id.get(saved.competency.name.lower())
+                if not target_id or target_id in score_map:
+                    continue
+                if saved.score > 0 or saved.submitted_at:
+                    score_map[target_id] = saved.score
+        out[student.id] = score_map
+    return out
+
+
 def build_display_score_map(
     assessment: ProjectAssessment | None,
     *,
@@ -422,6 +530,7 @@ def save_competency_observation_ratings_and_score(
     competency_id: int,
     ratings_by_criterion: dict[int, int],
     user,
+    scheme=None,
 ) -> tuple[Decimal | None, str]:
     """
     Save observations and competency % for one competency only.
@@ -463,9 +572,10 @@ def save_competency_observation_ratings_and_score(
     merged_ratings = existing_ratings_map(student.id, checklist.id, year, term)
     merged_ratings.update(ratings_by_criterion)
 
+    score_competency = competency_for_score_sheet(entry["competency"], scheme or checklist.scheme)
     assessment, _ = ProjectAssessment.objects.get_or_create(
         student=student,
-        scheme=checklist.scheme,
+        scheme=score_competency.scheme,
         year=year,
         term=term,
         defaults={"created_by": user},
@@ -478,21 +588,21 @@ def save_competency_observation_ratings_and_score(
         for s in CompetencyScore.objects.filter(assessment=assessment)
     }
     pct = compute_single_competency_percentage(entry, merged_ratings)
-    comp_name = entry["competency"].name
+    comp_name = score_competency.name
 
     if pct is None:
         return None, comp_name
 
-    if competency_id in existing_scores or competency_has_met_observations(entry, merged_ratings):
-        if competency_id in existing_scores:
-            obj = existing_scores[competency_id]
+    if score_competency.id in existing_scores or competency_has_met_observations(entry, merged_ratings):
+        if score_competency.id in existing_scores:
+            obj = existing_scores[score_competency.id]
             obj.score = pct
             obj.submitted_at = timezone.now()
             obj.save(update_fields=["score", "submitted_at"])
         else:
             CompetencyScore.objects.create(
                 assessment=assessment,
-                competency_id=competency_id,
+                competency=score_competency,
                 score=pct,
                 submitted_at=timezone.now(),
             )

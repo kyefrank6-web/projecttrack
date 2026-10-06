@@ -66,7 +66,8 @@ from .observation_utils import (
     latest_assessor_display_name,
     student_has_observation_ratings,
     active_checklist_class_levels,
-    build_display_score_map,
+    student_display_score_maps,
+    terms_with_marks_for_students,
     percentages_to_persist,
     resolve_checklist,
     resolve_checklist_for_student,
@@ -1508,8 +1509,7 @@ def supervisor_dashboard(request):
         students_qs = students_qs.filter(class_level=class_filter)
     students = list(students_qs)
 
-    year = int(timezone.now().year)
-    term = current_school_term()
+    year, term = _score_period(request)
     checklist_class_levels = active_checklist_class_levels(profile.school_id, year=year)
     has_checklist = bool(checklist_class_levels)
     theme_classes = [class_filter] if class_filter else assigned_classes
@@ -1518,28 +1518,23 @@ def supervisor_dashboard(request):
     )
     scheme = _active_scheme()
     competencies = list(Competency.objects.filter(scheme=scheme).order_by("order", "id")) if scheme else []
-    student_rows = []
+    assigned_ids = list(
+        Student.objects.active_only()
+        .filter(school=profile.school, supervisor=request.user)
+        .values_list("id", flat=True)
+    )
+    marked_terms = terms_with_marks_for_students(assigned_ids, year)
     if scheme and students:
-        assessments = {
-            a.student_id: a
-            for a in ProjectAssessment.objects.filter(
-                student__in=students, scheme=scheme, year=year, term=term
-            ).prefetch_related("scores")
-        }
-        for s in students:
-            checklist = resolve_checklist_for_student(s, year=year, term=term)
-            student_rows.append(
-                {
-                    "student": s,
-                    "score_map": build_display_score_map(
-                        assessments.get(s.id),
-                        checklist=checklist,
-                        student_id=s.id,
-                        year=year,
-                        term=term,
-                    ),
-                }
-            )
+        score_maps = student_display_score_maps(
+            students,
+            scheme,
+            year,
+            term,
+            checklist_for=lambda s: resolve_checklist_for_student(s, year=year, term=term),
+        )
+        student_rows = [
+            {"student": s, "score_map": score_maps.get(s.id, {})} for s in students
+        ]
     else:
         student_rows = [{"student": s, "score_map": {}} for s in students]
 
@@ -1555,6 +1550,8 @@ def supervisor_dashboard(request):
             "class_project_themes": class_project_themes,
             "current_year": year,
             "current_term": term,
+            "marks_on_other_terms": sorted(t for t in marked_terms if t != term),
+            "current_term_has_marks": term in marked_terms,
             "assigned_classes": assigned_classes,
             "class_filter": class_filter,
         },
@@ -1722,6 +1719,23 @@ def download_evidence(request, evidence_id: int):
         raise Http404()
 
     return FileResponse(ev.file.open("rb"), as_attachment=True, filename=ev.file.name.split("/")[-1])
+
+
+def _score_period(request) -> tuple[int, int]:
+    """Year and term from the query string, otherwise the current school period."""
+    try:
+        year = int(request.GET.get("year") or timezone.now().year)
+    except (TypeError, ValueError):
+        year = timezone.now().year
+    if year < 2000 or year > 2100:
+        year = timezone.now().year
+    try:
+        term = int(request.GET.get("term") or current_school_term())
+    except (TypeError, ValueError):
+        term = current_school_term()
+    if term not in (1, 2, 3):
+        term = current_school_term()
+    return year, term
 
 
 def _active_scheme(scheme_id: str | None = None) -> AssessmentScheme | None:
@@ -1945,6 +1959,7 @@ def _render_score_form(
                                 competency_id=competency_id,
                                 ratings_by_criterion=ratings,
                                 user=request.user,
+                                scheme=scheme,
                             )
                         except ValueError as exc:
                             messages.error(request, str(exc))
@@ -1993,6 +2008,11 @@ def _render_score_form(
                             q += f"&scheme_id={scheme.id}"
                         return redirect(f"{request.path}{q}")
                     messages.error(request, err or "Could not save score.")
+        else:
+            messages.error(
+                request,
+                "Marks were not saved. Check the year, term, and assessment scheme, then submit again.",
+            )
         scheme = (
             meta_form.cleaned_data["scheme"]
             if meta_form.is_valid()
@@ -2042,13 +2062,13 @@ def _render_score_form(
             submitted_competency_ids = submitted_competency_ids_for_assessment(assessment)
 
     existing_scores = (
-        build_display_score_map(
-            assessment,
-            checklist=checklist,
-            student_id=student.id,
-            year=year,
-            term=term,
-        )
+        student_display_score_maps(
+            [student],
+            scheme,
+            year,
+            term,
+            checklist_for=lambda _student: checklist,
+        ).get(student.id, {})
         if scheme
         else {}
     )
@@ -2103,9 +2123,7 @@ def _render_score_form(
             "read_only_observation": False,
             "year": year,
             "term": term,
-            "submitted_competency_ids": submitted_competency_ids
-            if checklist
-            else set(),
+            "submitted_competency_ids": submitted_competency_ids,
         },
     )
 
@@ -2220,8 +2238,7 @@ def class_scores(request, class_level: str):
     if not form.is_valid():
         form = ClassFilterForm(initial={"class_level": class_level, "year": timezone.now().year, "term": str(current_school_term())})
 
-    year = int((request.GET.get("year") or timezone.now().year))
-    term = int((request.GET.get("term") or current_school_term()))
+    year, term = _score_period(request)
     scheme = AssessmentScheme.objects.filter(active=True).order_by("id").first()
     scheme_id = request.GET.get("scheme_id")
     if scheme_id and scheme_id.isdigit():
@@ -2243,6 +2260,12 @@ def class_scores(request, class_level: str):
             | Q(supervisor__last_name__icontains=search_q)
         )
     students = list(students_qs)
+    class_student_ids = list(
+        Student.objects.active_only()
+        .filter(school=profile.school, class_level=class_level)
+        .values_list("id", flat=True)
+    )
+    marked_terms = terms_with_marks_for_students(class_student_ids, year)
     assessments = (
         ProjectAssessment.objects.select_related("student")
         .filter(student__in=students, scheme=scheme, year=year, term=term)
@@ -2256,17 +2279,21 @@ def class_scores(request, class_level: str):
         if scheme
         else None
     )
+    score_maps = (
+        student_display_score_maps(
+            students,
+            scheme,
+            year,
+            term,
+            checklist_for=lambda _student: checklist,
+        )
+        if scheme
+        else {}
+    )
 
     table = []
     for s in students:
         a = by_student.get(s.id)
-        score_map = build_display_score_map(
-            a,
-            checklist=checklist,
-            student_id=s.id,
-            year=year,
-            term=term,
-        )
         has_obs_pdf = (
             bool(checklist)
             and student_has_observation_ratings(s.id, checklist.id, year, term)
@@ -2275,7 +2302,7 @@ def class_scores(request, class_level: str):
             {
                 "student": s,
                 "assessment": a,
-                "score_map": score_map,
+                "score_map": score_maps.get(s.id, {}),
                 "has_observation_pdf": has_obs_pdf,
             }
         )
@@ -2298,6 +2325,8 @@ def class_scores(request, class_level: str):
             "search_q": search_q,
             "total_students": total_students,
             "filtered_students": len(table),
+            "marks_on_other_terms": sorted(t for t in marked_terms if t != term),
+            "current_term_has_marks": term in marked_terms,
         },
     )
 
@@ -2487,12 +2516,6 @@ def export_class_scores(request, class_level: str):
         .filter(school=profile.school, class_level=class_level)
         .order_by(Lower("full_name"))
     )
-    assessments = (
-        ProjectAssessment.objects.filter(student__in=students, scheme=scheme, year=year, term=term)
-        .prefetch_related("scores")
-        .select_related("student")
-    )
-    by_student = {a.student_id: a for a in assessments}
 
     wb = Workbook()
     ws = wb.active
@@ -2502,15 +2525,15 @@ def export_class_scores(request, class_level: str):
     ws.append(headers)
 
     checklist = resolve_checklist(profile.school_id, year=year, term=term, class_level=class_level)
+    score_maps = student_display_score_maps(
+        students,
+        scheme,
+        year,
+        term,
+        checklist_for=lambda _student: checklist,
+    )
     for s in students:
-        a = by_student.get(s.id)
-        score_map = build_display_score_map(
-            a,
-            checklist=checklist,
-            student_id=s.id,
-            year=year,
-            term=term,
-        )
+        score_map = score_maps.get(s.id, {})
         row = [
             s.full_name,
             s.supervisor.get_full_name() or s.supervisor.username,
@@ -2568,6 +2591,13 @@ def export_class_competency_scores(request, class_level: str):
     )
     by_student = {a.student_id: a for a in assessments}
     checklist = resolve_checklist(profile.school_id, year=year, term=term, class_level=class_level)
+    score_maps = student_display_score_maps(
+        students,
+        scheme,
+        year,
+        term,
+        checklist_for=lambda _student: checklist,
+    )
 
     wb = Workbook()
     ws = wb.active
@@ -2585,13 +2615,7 @@ def export_class_competency_scores(request, class_level: str):
 
     for s in students:
         a = by_student.get(s.id)
-        score_map = build_display_score_map(
-            a,
-            checklist=checklist,
-            student_id=s.id,
-            year=year,
-            term=term,
-        )
+        score_map = score_maps.get(s.id, {})
         submitted = ""
         if a:
             cs = CompetencyScore.objects.filter(assessment=a, competency=competency).first()
@@ -3169,12 +3193,6 @@ def export_class_with_evidence(request, class_level: str):
     )
     student_ids = [s.id for s in students]
 
-    assessments = (
-        ProjectAssessment.objects.filter(student_id__in=student_ids, scheme=scheme, year=year, term=term)
-        .prefetch_related("scores")
-    )
-    by_student = {a.student_id: a for a in assessments}
-
     evidence_by_student: dict[int, dict[str, ProjectEvidence]] = {sid: {} for sid in student_ids}
     if student_ids:
         for ev in ProjectEvidence.objects.filter(student_id__in=student_ids):
@@ -3198,15 +3216,15 @@ def export_class_with_evidence(request, class_level: str):
     titles_ws.append(["Student Name", "Project Title", "Supervisor", "Student No", "Stream"])
 
     checklist = resolve_checklist(profile.school_id, year=year, term=term, class_level=class_level)
+    score_maps = student_display_score_maps(
+        students,
+        scheme,
+        year,
+        term,
+        checklist_for=lambda _student: checklist,
+    )
     for s in students:
-        a = by_student.get(s.id)
-        score_map = build_display_score_map(
-            a,
-            checklist=checklist,
-            student_id=s.id,
-            year=year,
-            term=term,
-        )
+        score_map = score_maps.get(s.id, {})
         by_cat = evidence_by_student.get(s.id, {})
         row = [
             s.full_name,

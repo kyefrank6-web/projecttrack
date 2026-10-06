@@ -74,7 +74,7 @@ def build_class_scores_pdf(
     by_student: dict,
     checklist=None,
 ) -> bytes:
-    from .observation_utils import build_display_score_map
+    from .observation_utils import student_display_score_maps
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
         buffer,
@@ -90,16 +90,21 @@ def build_class_scores_pdf(
 
     text_style = _table_cell_style("ScoreCell")
     headers = ["Student", "Supervisor", "No.", "Stream"] + [c.name for c in competencies]
+    scheme = competencies[0].scheme if competencies else None
+    score_maps = (
+        student_display_score_maps(
+            students,
+            scheme,
+            year,
+            term,
+            checklist_for=lambda _student: checklist,
+        )
+        if scheme
+        else {}
+    )
     data = [headers]
     for s in students:
-        a = by_student.get(s.id)
-        score_map = build_display_score_map(
-            a,
-            checklist=checklist,
-            student_id=s.id,
-            year=year,
-            term=term,
-        )
+        score_map = score_maps.get(s.id, {})
         row = [
             Paragraph(s.full_name, text_style),
             Paragraph(_supervisor_label(s), text_style),

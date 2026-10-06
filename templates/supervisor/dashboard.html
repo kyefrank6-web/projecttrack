@@ -68,6 +68,37 @@
 
   {% include "supervisor/_class_selector.html" %}
 
+  <form method="get" class="card mb-3">
+    <div class="card-body py-3 d-flex flex-wrap gap-2 align-items-end">
+      {% if class_filter %}
+        <input type="hidden" name="class" value="{{ class_filter }}" />
+      {% endif %}
+      <div>
+        <label class="form-label small mb-1" for="supervisor-year">Year</label>
+        <input id="supervisor-year" class="form-control" type="number" name="year" min="2000" max="2100" value="{{ current_year }}" />
+      </div>
+      <div>
+        <label class="form-label small mb-1" for="supervisor-term">Term</label>
+        <select id="supervisor-term" class="form-select" name="term">
+          <option value="1" {% if current_term == 1 %}selected{% endif %}>Term 1</option>
+          <option value="2" {% if current_term == 2 %}selected{% endif %}>Term 2</option>
+          <option value="3" {% if current_term == 3 %}selected{% endif %}>Term 3</option>
+        </select>
+      </div>
+      <button class="btn btn-outline-primary" type="submit">Show marks</button>
+    </div>
+  </form>
+
+  {% if not current_term_has_marks and marks_on_other_terms %}
+    <div class="alert alert-warning">
+      Marks you already submitted are saved under
+      {% for other_term in marks_on_other_terms %}
+        <a href="?year={{ current_year }}&term={{ other_term }}{% if class_filter %}&class={{ class_filter }}{% endif %}">Term {{ other_term }}</a>{% if not forloop.last %}, {% endif %}
+      {% endfor %}
+      . Term {{ current_term }} does not have those marks yet.
+    </div>
+  {% endif %}
+
 
 
   {% if has_observation_checklist %}

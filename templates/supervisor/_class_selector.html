@@ -6,7 +6,7 @@
         {% for c in assigned_classes %}
           <a
             class="btn btn-sm {% if class_filter == c %}btn-primary{% else %}btn-outline-primary{% endif %}"
-            href="?class={{ c }}"
+            href="?class={{ c }}&year={{ current_year }}&term={{ current_term }}"
           >
             {{ c }}
           </a>
