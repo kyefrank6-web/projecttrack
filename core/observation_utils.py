@@ -7,6 +7,7 @@ from typing import Any
 from django.db import transaction
 from django.utils import timezone
 
+from .school_utils import current_school_term
 from .models import (
     Competency,
     CompetencyScore,
@@ -156,7 +157,7 @@ def active_checklist_class_levels(school_id: int, *, year: int) -> set[str]:
 
     result: set[str] = set()
     for level, _ in SecondaryClassLevel.choices:
-        if resolve_checklist(school_id, year=year, term=1, class_level=level):
+        if resolve_checklist(school_id, year=year, term=current_school_term(), class_level=level):
             result.add(level)
     return result
 

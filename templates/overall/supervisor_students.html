@@ -12,6 +12,7 @@
     </div>
     <div class="d-flex gap-2 flex-wrap">
       <a class="btn btn-primary" href="{% url 'overall_add_student' %}?supervisor={{ supervisor.id }}">Add student</a>
+      <a class="btn btn-outline-primary" href="{% url 'export_supervisor_students' supervisor.id %}">Download learners</a>
       <a class="btn btn-outline-light border" href="{% url 'overall_supervisors' %}">All supervisors</a>
       <a class="btn btn-outline-light border" href="{% url 'overall_dashboard' %}">Dashboard</a>
     </div>

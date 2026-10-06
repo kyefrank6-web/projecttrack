@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from zoneinfo import ZoneInfo
+
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.utils import timezone
@@ -9,6 +11,25 @@ from .models import ProjectEvidence, Role, School, SchoolRegistrationStatus, Stu
 User = get_user_model()
 
 SCHOOL_DELETION_GRACE_DAYS = 30
+UGANDA_TZ = ZoneInfo("Africa/Kampala")
+
+
+def current_school_term(when=None) -> int:
+    """
+    Current Uganda secondary-school term from the calendar date (East Africa Time).
+
+    Term 1 runs February–May (January, the holiday before the new year, is treated as Term 1).
+    Term 2 runs June–August. Term 3 runs September–December.
+    """
+    moment = when or timezone.now()
+    if timezone.is_aware(moment):
+        moment = moment.astimezone(UGANDA_TZ)
+    month = moment.month
+    if month <= 5:
+        return 1
+    if month <= 8:
+        return 2
+    return 3
 
 
 def school_name_blocks_registration(name: str) -> bool:

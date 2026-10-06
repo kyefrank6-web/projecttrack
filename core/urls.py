@@ -77,6 +77,11 @@ urlpatterns = [
         views.overall_supervisor_students,
         name="overall_supervisor_students",
     ),
+    path(
+        "overall/supervisors/<int:supervisor_id>/students/download/",
+        views.export_supervisor_students,
+        name="export_supervisor_students",
+    ),
     path("overall/students/", views.overall_students, name="overall_students"),
     path("overall/students/promote/", views.overall_promote_students, name="overall_promote_students"),
     path(

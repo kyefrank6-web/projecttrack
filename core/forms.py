@@ -19,6 +19,7 @@ from .models import (
     Student,
     UserProfile,
 )
+from .school_utils import current_school_term
 from .themes import theme_choices
 from .builtin_checklists import (
     BUILTIN_CHECKLISTS,
@@ -289,6 +290,7 @@ class ScoreStudentForm(forms.Form):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields["term"].initial = str(current_school_term())
         for _, field in self.fields.items():
             field.widget.attrs.setdefault("class", "form-control")
 
@@ -298,6 +300,10 @@ class ClassFilterForm(forms.Form):
     year = forms.IntegerField(min_value=2000, max_value=2100)
     term = forms.ChoiceField(choices=[("1", "Term 1"), ("2", "Term 2"), ("3", "Term 3")])
     scheme_id = forms.IntegerField(required=False)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["term"].initial = str(current_school_term())
 
 
 class UsernameChangeForm(forms.Form):
@@ -457,11 +463,11 @@ class SetNewPasswordForm(forms.Form):
     new_password1 = forms.CharField(
         label="New password",
         min_length=8,
-        widget=forms.PasswordInput(attrs={"class": "form-control", "autocomplete": "new-password"}),
+        widget=forms.PasswordInput(attrs={"class": "form-control pe-5", "autocomplete": "new-password"}),
     )
     new_password2 = forms.CharField(
         label="Confirm new password",
-        widget=forms.PasswordInput(attrs={"class": "form-control", "autocomplete": "new-password"}),
+        widget=forms.PasswordInput(attrs={"class": "form-control pe-5", "autocomplete": "new-password"}),
     )
 
     def clean(self):

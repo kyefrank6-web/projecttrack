@@ -42,7 +42,7 @@
 
         <h1 class="h4 mb-1 fw-bold">Welcome, {{ user.first_name|default:user.username }}</h1>
 
-        <p class="mb-0 opacity-90">Score your assigned students and upload project photo evidence</p>
+        <p class="mb-0 opacity-90">Score your assigned students and upload project photo evidence · {{ current_year }} · Term {{ current_term }}</p>
 
       </div>
 
@@ -220,7 +220,7 @@
 
                 <td>
 
-                  <a class="btn btn-sm btn-primary" href="{% url 'score_student' s.id %}">
+                  <a class="btn btn-sm btn-primary" href="{% url 'score_student' s.id %}?year={{ current_year }}&term={{ current_term }}">
 
                     {% if s.class_level in checklist_class_levels %}Observe &amp; score{% else %}Scores{% endif %}
 

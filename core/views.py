@@ -82,6 +82,7 @@ from .themes import THEMES
 from .school_utils import (
     SCHOOL_DELETION_GRACE_DAYS,
     clear_registration_blockers,
+    current_school_term,
     deactivate_school,
     delete_all_students_from_school,
     delete_school_completely,
@@ -1020,6 +1021,50 @@ def overall_supervisor_students(request, supervisor_id: int):
     )
 
 
+@login_required
+def export_supervisor_students(request, supervisor_id: int):
+    """Excel list of learners assigned to one supervisor at the overall supervisor's school."""
+    profile = _require_profile(request)
+    if not _is_overall(profile):
+        raise Http404()
+
+    membership = _require_school_supervisor(profile, supervisor_id)
+    supervisor_user = membership.user
+    display = _user_display_name(supervisor_user)
+    students = list(
+        _overall_students_queryset(profile.school, supervisor_user_id=supervisor_id)
+    )
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Learners"
+    ws.append(["Full name", "Student number", "Class", "Stream", "Project title", "Supervisor"])
+    for student in students:
+        ws.append(
+            [
+                student.full_name,
+                student.student_no,
+                student.class_level,
+                student.stream,
+                student.project_title,
+                display,
+            ]
+        )
+
+    out = io.BytesIO()
+    wb.save(out)
+    out.seek(0)
+    safe_supervisor = re.sub(r"[^A-Za-z0-9._-]+", "_", display).strip("._") or "supervisor"
+    safe_school = re.sub(r"[^A-Za-z0-9._-]+", "_", profile.school.name).strip("._") or "school"
+    filename = f"{safe_school}_{safe_supervisor}_learners.xlsx"
+    resp = HttpResponse(
+        out.getvalue(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    resp["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return resp
+
+
 def _read_uploaded_table(uploaded_file, *, upload_kind: str = "student") -> list[dict[str, str]]:
     """
     Reads CSV or XLSX. If row 1 is not column headers (e.g. only names), uses default columns.
@@ -1464,7 +1509,7 @@ def supervisor_dashboard(request):
     students = list(students_qs)
 
     year = int(timezone.now().year)
-    term = 1
+    term = current_school_term()
     checklist_class_levels = active_checklist_class_levels(profile.school_id, year=year)
     has_checklist = bool(checklist_class_levels)
     theme_classes = [class_filter] if class_filter else assigned_classes
@@ -1509,6 +1554,7 @@ def supervisor_dashboard(request):
             "checklist_class_levels": checklist_class_levels,
             "class_project_themes": class_project_themes,
             "current_year": year,
+            "current_term": term,
             "assigned_classes": assigned_classes,
             "class_filter": class_filter,
         },
@@ -1956,11 +2002,11 @@ def _render_score_form(
         term = (
             int(meta_form.cleaned_data["term"])
             if meta_form.is_valid()
-            else int(request.POST.get("term") or 1)
+            else int(request.POST.get("term") or current_school_term())
         )
     else:
         year = int(request.GET.get("year") or timezone.now().year)
-        term = int(request.GET.get("term") or 1)
+        term = int(request.GET.get("term") or current_school_term())
         scheme = _active_scheme(request.GET.get("scheme_id"))
         meta_form = ScoreStudentForm(initial={"scheme": scheme, "year": year, "term": str(term)})
 
@@ -2100,7 +2146,7 @@ def overall_edit_student_scores(request, student_id: int):
 
     student = get_object_or_404(Student, id=student_id, school=profile.school)
     year = request.GET.get("year") or request.POST.get("year") or timezone.now().year
-    term = request.GET.get("term") or request.POST.get("term") or 1
+    term = request.GET.get("term") or request.POST.get("term") or current_school_term()
     scheme_id = request.GET.get("scheme_id") or request.POST.get("scheme")
     back_url = (
         f"{reverse('class_scores', kwargs={'class_level': student.class_level})}"
@@ -2123,7 +2169,7 @@ def overall_edit_student(request, student_id: int):
 
     student = get_object_or_404(Student, id=student_id, school=profile.school)
     year = request.GET.get("year") or request.POST.get("year") or timezone.now().year
-    term = request.GET.get("term") or request.POST.get("term") or 1
+    term = request.GET.get("term") or request.POST.get("term") or current_school_term()
     scheme_id = request.GET.get("scheme_id") or request.POST.get("scheme_id") or ""
     back_url = (
         f"{reverse('class_scores', kwargs={'class_level': student.class_level})}"
@@ -2169,13 +2215,13 @@ def class_scores(request, class_level: str):
 
     form = ClassFilterForm(
         request.GET or None,
-        initial={"class_level": class_level, "year": timezone.now().year, "term": "1"},
+        initial={"class_level": class_level, "year": timezone.now().year, "term": str(current_school_term())},
     )
     if not form.is_valid():
-        form = ClassFilterForm(initial={"class_level": class_level, "year": timezone.now().year, "term": "1"})
+        form = ClassFilterForm(initial={"class_level": class_level, "year": timezone.now().year, "term": str(current_school_term())})
 
     year = int((request.GET.get("year") or timezone.now().year))
-    term = int((request.GET.get("term") or 1))
+    term = int((request.GET.get("term") or current_school_term()))
     scheme = AssessmentScheme.objects.filter(active=True).order_by("id").first()
     scheme_id = request.GET.get("scheme_id")
     if scheme_id and scheme_id.isdigit():
@@ -2321,7 +2367,7 @@ def export_student_observation_checklist_pdf(request, student_id: int):
         school=profile.school,
     )
     year = int(request.GET.get("year") or timezone.now().year)
-    term = int(request.GET.get("term") or 1)
+    term = int(request.GET.get("term") or current_school_term())
 
     result = _build_student_scored_observation_pdf_export(
         school=profile.school,
@@ -2364,7 +2410,7 @@ def export_class_observation_checklists_zip(request, class_level: str):
         raise Http404()
 
     year = int(request.GET.get("year") or timezone.now().year)
-    term = int(request.GET.get("term") or 1)
+    term = int(request.GET.get("term") or current_school_term())
     scheme_id = request.GET.get("scheme_id")
     q = f"?year={year}&term={term}"
     if scheme_id:
@@ -2427,7 +2473,7 @@ def export_class_scores(request, class_level: str):
         raise Http404()
 
     year = int((request.GET.get("year") or timezone.now().year))
-    term = int((request.GET.get("term") or 1))
+    term = int((request.GET.get("term") or current_school_term()))
     scheme = AssessmentScheme.objects.filter(active=True).order_by("id").first()
     scheme_id = request.GET.get("scheme_id")
     if scheme_id and scheme_id.isdigit():
@@ -2500,7 +2546,7 @@ def export_class_competency_scores(request, class_level: str):
         raise Http404("Select a competency to export.")
 
     year = int((request.GET.get("year") or timezone.now().year))
-    term = int((request.GET.get("term") or 1))
+    term = int((request.GET.get("term") or current_school_term()))
     scheme = AssessmentScheme.objects.filter(active=True).order_by("id").first()
     scheme_id = request.GET.get("scheme_id")
     if scheme_id and scheme_id.isdigit():
@@ -2598,7 +2644,7 @@ def _resolve_class_export(request, profile, class_level: str):
     if class_level not in {c for c, _ in SecondaryClassLevel.choices}:
         raise Http404()
     year = int(request.GET.get("year") or timezone.now().year)
-    term = int(request.GET.get("term") or 1)
+    term = int(request.GET.get("term") or current_school_term())
     scheme = AssessmentScheme.objects.filter(active=True).order_by("id").first()
     scheme_id = request.GET.get("scheme_id")
     if scheme_id and str(scheme_id).isdigit():
@@ -3021,7 +3067,7 @@ def export_class_project_titles(request, class_level: str):
         raise Http404()
 
     year = int(request.GET.get("year") or timezone.now().year)
-    term = int(request.GET.get("term") or 1)
+    term = int(request.GET.get("term") or current_school_term())
 
     students = list(
         Student.objects.active_only().filter(school=profile.school, class_level=class_level)
@@ -3107,7 +3153,7 @@ def export_class_with_evidence(request, class_level: str):
         raise Http404()
 
     year = int((request.GET.get("year") or timezone.now().year))
-    term = int((request.GET.get("term") or 1))
+    term = int((request.GET.get("term") or current_school_term()))
     scheme = AssessmentScheme.objects.filter(active=True).order_by("id").first()
     scheme_id = request.GET.get("scheme_id")
     if scheme_id and scheme_id.isdigit():

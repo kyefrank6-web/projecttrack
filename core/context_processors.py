@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from django.utils import timezone
+
 from .maintenance_utils import is_maintenance_mode, maintenance_message
+from .school_utils import current_school_term
 from .models import Role, SecondaryClassLevel, UserProfile
 from .themes import DEFAULT_THEME_KEY, get_theme
 
@@ -45,4 +48,6 @@ def navigation(request):
         "dashboard_url_name": dashboard_url_name,
         "nav_school": nav_school,
         "school_theme": school_theme,
+        "current_term": current_school_term(),
+        "current_year": timezone.now().year,
     }
