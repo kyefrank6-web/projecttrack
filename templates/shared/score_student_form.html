@@ -57,12 +57,12 @@
             <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
               <h3 class="h5 fw-bold text-primary mb-0">{{ c.name }}</h3>
               <div class="d-flex gap-2 flex-wrap">
-                {% if c.id in submitted_competency_ids %}
-                  <span class="badge text-bg-success">Submitted</span>
-                {% else %}
-                  <span class="badge text-bg-secondary">Not submitted yet</span>
-                {% endif %}
                 {% with pct=existing_scores|get_item:c.id %}
+                  {% if c.id in submitted_competency_ids or pct != "" %}
+                    <span class="badge text-bg-success">Submitted</span>
+                  {% else %}
+                    <span class="badge text-bg-secondary">Not submitted yet</span>
+                  {% endif %}
                   {% if pct != "" %}
                     <span class="badge text-bg-primary fs-6">Score: {{ pct }}%</span>
                   {% endif %}

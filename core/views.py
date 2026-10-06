@@ -2072,6 +2072,8 @@ def _render_score_form(
         if scheme
         else {}
     )
+    # A visible saved percentage is a submission, even if it was stored under another scheme.
+    submitted_competency_ids = set(submitted_competency_ids) | set(existing_scores)
 
     obs_template = "shared/score_student_observation.html"
     use_template = obs_template if checklist and observation_structure else template
